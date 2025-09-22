@@ -7,8 +7,8 @@ r"""
 @Description:
     可能需要对之前的版本进行兼容
 """
-from peewee import CharField
-from playhouse.migrate import migrate, SqliteMigrator
+from peewee import CharField, MySQLDatabase
+from playhouse.migrate import migrate, MySQLMigrator
 from swanboard.db import Tag
 from urllib.parse import quote
 
@@ -22,7 +22,13 @@ def compat_tag_key(db):
     - 新版本，以 tag id 为 folder 字段值
     """
 
-    migrator = SqliteMigrator(db)
+    if isinstance(db, MySQLDatabase):
+        migrator = MySQLMigrator(db)
+    else:
+        # 保持向后兼容性，如果不是MySQL数据库
+        from playhouse.migrate import SqliteMigrator
+        migrator = SqliteMigrator(db)
+
     folder = CharField(default="")
     migrate(migrator.add_column("tag", "folder", folder))
 

@@ -8,7 +8,7 @@ r"""
     测试兼容性迁移脚本
 """
 from swanboard.db.migrate import compat_tag_key
-from peewee import SqliteDatabase
+from peewee import MySQLDatabase
 from tutils import create_test_dir, mock_experiment
 from swanboard.db import (
     Project,
@@ -20,16 +20,28 @@ import os
 import nanoid
 
 
-def init_db(db_path: str):
+def init_db(db_config: dict):
     # 模拟 项目=>实验=>tag
     project = Project.init("test_project_for_migrate")
     experiment_id = mock_experiment(project.id)
-    db_path = os.path.join(db_path, "runs.swanlab")
-    swandb = SqliteDatabase(db_path)
+
+    # 创建MySQL测试数据库连接
+    swandb = MySQLDatabase(
+        database=db_config.get('database', 'test_swanlab_migrate'),
+        user=db_config.get('user', 'root'),
+        password=db_config.get('password', ''),
+        host=db_config.get('host', 'localhost'),
+        port=db_config.get('port', 3306),
+        charset='utf8mb4'
+    )
+
+    # 连接并创建测试数据库
+    swandb.connect()
+
     # 删除 tag 表，重新创建一个没有 folder 字段的 tag 表
     swandb.execute_sql("DROP TABLE IF EXISTS tag")
     swandb.execute_sql(
-        "CREATE TABLE tag (id INTEGER PRIMARY KEY AUTOINCREMENT, experiment_id INTEGER, name TEXT, type TEXT, description TEXT, system INTEGER, sort INTEGER, more TEXT, create_time TEXT, update_time TEXT)"
+        "CREATE TABLE tag (id INT AUTO_INCREMENT PRIMARY KEY, experiment_id INT, name VARCHAR(255), type VARCHAR(50), description TEXT, system INT, sort INT, more TEXT, create_time VARCHAR(50), update_time VARCHAR(50)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     )
     return swandb, experiment_id
 
@@ -38,7 +50,7 @@ def mock_tag_data(experiment_id: int, name: str):
     # 向 experiment 下添加 tag，该 tag 记录没有 folder 字段
     raw_sql = """
         INSERT INTO tag (experiment_id, name, type, description, system, sort, more, create_time, update_time)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     time = create_time()
     params = (
@@ -58,9 +70,17 @@ def mock_tag_data(experiment_id: int, name: str):
 class TestMigrateForTag:
 
     def test_compat_tag_key(self):
-        db_path = create_test_dir("test_migrate")
+        # MySQL测试数据库配置
+        db_config = {
+            'database': 'test_swanlab_migrate',
+            'user': os.getenv('MYSQL_USER', 'root'),
+            'password': os.getenv('MYSQL_PASSWORD', ''),
+            'host': os.getenv('MYSQL_HOST', 'localhost'),
+            'port': int(os.getenv('MYSQL_PORT', '3306'))
+        }
+
         # 重新初始化一个数据库，其中 tag 表没有 folder 字段
-        swandb, experiment_id = init_db(db_path)
+        swandb, experiment_id = init_db(db_config)
         assert not Tag.field_exists("folder")
         # 模拟 tag 记录，并创建各自的独立存储目录
         list = [nanoid.generate(size=10), f"{nanoid.generate(size=4)}/{nanoid.generate(size=4)}"]
@@ -72,3 +92,6 @@ class TestMigrateForTag:
         assert Tag.field_exists("folder")
         for tag in Tag.select():
             assert tag.folder == quote(tag.name, safe="")
+
+        # 清理测试数据库
+        swandb.close()

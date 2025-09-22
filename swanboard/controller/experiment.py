@@ -140,6 +140,8 @@ def get_experiment_info(experiment_id: int):
         实验唯一id
     """
 
+    # Ensure database connection is established
+    db = connect()
     experiment = Experiment.get(experiment_id).__dict__()
     experiment.pop("project_id")
 
@@ -173,13 +175,14 @@ def get_tag_data(experiment_id: int, tag: str) -> dict:
     """
     # ---------------------------------- 前置处理 ----------------------------------
     tag_folder = Tag.filter(Tag.name == tag, Tag.experiment_id == experiment_id).first().folder
+    print("tag_folder:", tag_folder)
     # 获取tag对应的存储目录
     try:
         tag_path: str = os.path.join(__get_logs_dir_by_id(experiment_id), tag_folder)
     except NotExistedError:
         return NOT_FOUND_404("experiment not found")
     if not os.path.exists(tag_path):
-        return NOT_FOUND_404("tag not found")
+        return NOT_FOUND_404(f"tag folder not found {tag_folder}")
     # 获取目录下存储的所有数据
     tag_data: list = []
     # ---------------------------------- 读取文件数据 ----------------------------------

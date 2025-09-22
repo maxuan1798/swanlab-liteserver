@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: swanlab-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-swanlab123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-swanlab}
+      MYSQL_USER: ${MYSQL_USER:-swanlab}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-swanlab123}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - swanlab-network
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  swanlab:
+    build:
+      context: ..
+      dockerfile: swanboard/Dockerfile
+    container_name: swanlab-dashboard
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-swanlab}
+      MYSQL_USER: ${MYSQL_USER:-swanlab}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-swanlab123}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+    ports:
+      - "${SWANLAB_PORT:-5173}:5173"
+    depends_on:
+      - mysql
+    networks:
+      - swanlab-network
+    volumes:
+      - ../logs:/app/logs
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  swanlab-network:
+    driver: bridge
+

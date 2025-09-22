@@ -3,7 +3,7 @@ from swankit.callback.models import ColumnInfo
 from .db.models import *
 from .db import add_multi_chart, connect, NotExistedError, ExistedError, ChartTypeError
 from typing import Tuple, Optional
-from swanboard.utils import swanlog, get_swanlog_dir
+from swanboard.utils import swanlog
 import time
 import re
 
@@ -13,16 +13,37 @@ class SwanBoardCallback(SwanKitCallback):
     SwanBoardCallback类，swanlab本体与数据库的连接回调函数
     """
 
-    def __init__(self):
+    def __init__(self, db_config: Optional[dict] = None):
         super(SwanBoardCallback, self).__init__()
         self.exp: Optional[Experiment] = None
+        self.db_config = db_config
 
     def __str__(self) -> str:
         return "SwanBoardCallback"
 
     def on_init(self, proj_name: str, *args, **kwargs):
-        # 连接本地数据库，要求路径必须存在，但是如果数据库文件不存在，会自动创建
-        connect(autocreate=True, path=get_swanlog_dir())
+        # 连接MySQL数据库，如果数据库不存在会自动创建
+        # 可以通过构造函数传入db_config参数，或通过环境变量或配置文件设置MySQL连接参数
+        import os
+        if self.db_config:
+            db_config = {
+                'database': self.db_config.get('database', 'swanlab'),
+                'user': self.db_config.get('user', 'root'),
+                'password': self.db_config.get('password', ''),
+                'host': self.db_config.get('host', 'host.docker.internal'),
+                'port': self.db_config.get('port', 3306),
+                'autocreate': self.db_config.get('autocreate', True)
+            }
+        else:
+            db_config = {
+                'database': os.getenv('MYSQL_DATABASE', 'swanlab'),
+                'user': os.getenv('MYSQL_USER', 'root'),
+                'password': os.getenv('MYSQL_PASSWORD', ''),
+                'host': os.getenv('MYSQL_HOST', 'host.docker.internal'),
+                'port': int(os.getenv('MYSQL_PORT', '3306')),
+                'autocreate': True
+            }
+        connect(**db_config)
         # 初始化项目数据库
         Project.init(proj_name)
 

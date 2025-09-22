@@ -72,9 +72,20 @@ class SwanBoardRun:
         # debug一下当前日志文件夹的位置
         swl.debug("Try to explore the swanlab experiment logs in: " + FONT.bold(path))
         try:
-            connect(path=path)
-        except FileNotFoundError:
-            swl.error("Can not find the swanlab db in: " + FONT.bold(path))
+            # Connect to MySQL database using environment variables
+            import os
+            db_config = {
+                'database': os.getenv('MYSQL_DATABASE', 'swanlab'),
+                'user': os.getenv('MYSQL_USER', 'root'),
+                'password': os.getenv('MYSQL_PASSWORD', ''),
+                'host': os.getenv('MYSQL_HOST', 'host.docker.internal'),
+                'port': int(os.getenv('MYSQL_PORT', '3306')),
+                'autocreate': True
+            }
+            connect(**db_config)
+            swl.debug("Successfully connected to MySQL database: " + FONT.bold(db_config['database']))
+        except Exception as e:
+            swl.error("Can not connect to MySQL database: " + FONT.bold(str(e)))
         # ---------------------------------- 日志打印 ----------------------------------
         # 可用URL
         ipv4 = URL.get_all_ip()

@@ -16,7 +16,7 @@ from swanboard.utils import check_desc_format, get_swanlog_dir, COLOR_LIST, swan
 import yaml
 from typing import List
 from ..db.utils.chart import transform_to_multi_exp_charts
-from .db import NotExistedError
+from .db import NotExistedError, connect
 from .utils import get_proj_charts
 
 # 自定义响应
@@ -77,7 +77,10 @@ def get_project_info(project_id: int = DEFAULT_PROJECT_ID) -> dict:
     """
 
     try:
+        # Ensure database connection is established
+        db = connect()
         project = Project.filter(Project.id == project_id).first()
+        print("project:", project)
         data = project.__dict__()
         data["logdir"] = get_swanlog_dir()
         experiments = __to_list(project.experiments)
@@ -116,6 +119,8 @@ def get_project_summary(project_id: int = DEFAULT_PROJECT_ID) -> dict:
         项目总结信息
     """
 
+    # Ensure database connection is established
+    db = connect()
     # 查找所有实验，提出 id 列表
     experiments = Experiment.select().where(Experiment.project_id == project_id)
     exprs = [
@@ -198,6 +203,8 @@ async def update_project_info(request: Request, project_id: int = DEFAULT_PROJEC
     # 检查格式
     body["description"] = check_desc_format(body["description"], False)
 
+    # Ensure database connection is established
+    db = connect()
     project = Project.filter(Project.id == project_id).first()
     dict_project = project.__dict__()
 
@@ -231,6 +238,8 @@ async def delete_project(project_id: int = DEFAULT_PROJECT_ID):
     TODO: 原子操作，同时删除项目和实验
     """
 
+    # Ensure database connection is established
+    db = connect()
     # 检查是否有正在运行的实验
     running_exp = Experiment.filter(Experiment.project_id == project_id, Experiment.status == RUNNING_STATUS).count()
     if running_exp > 0:
@@ -257,6 +266,8 @@ async def get_project_charts(project_id: int = DEFAULT_PROJECT_ID) -> dict:
     2. 依据规则获取所有实验的图表数据
     """
 
+    # Ensure database connection is established
+    db = connect()
     # COMPAT 兼容以前没有多实验对比数据的情况
     try:
         transform_to_multi_exp_charts(project_id)

@@ -242,3 +242,4 @@ class Chart(SwanModel):
         chart.sort = sort
         chart.save()
         return chart
+
