@@ -5,12 +5,14 @@ swankit
 fastapi>=0.110.1
 uvicorn>=0.14.0
 
-
 # database
 peewee
 ujson
 
+# MySQL support for cloud sync
+PyMySQL>=1.0.0
 
 # Information collection
 psutil
 setuptools
+requests

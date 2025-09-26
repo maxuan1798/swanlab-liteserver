@@ -113,3 +113,18 @@ def UNEXPECTED_ERROR_500(message: str = "unexpected error"):
         status_code=500,
         content=_ResponseBody(_UNEXCEPTED_ERROR_500, message=message),
     )
+
+
+def BAD_REQUEST_400(message: str = "bad request"):
+    """错误请求"""
+    return _JSONResponse(
+        status_code=400,
+        content=_ResponseBody(3400, message=message),
+    )
+
+def UNAUTHORIZED_401(message: str = "unauthorized"):
+    """未授权"""
+    return _JSONResponse(
+        status_code=401,
+        content=_ResponseBody(3401, message=message),
+    )

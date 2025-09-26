@@ -87,6 +87,9 @@ from .router.chart import router as chart
 # 媒体文件路由，允许前端获取其他产生的媒体文件
 from .router.media import router as media
 
+# 云端API路由，支持EnhancedSwanBoardCallback的HTTP通信
+from .router.cloud import router as cloud
+
 # 使用配置列表，统一导入
 prefix = "/api/v1"
 app.include_router(project, prefix=prefix + "/project")
@@ -94,3 +97,4 @@ app.include_router(experiment, prefix=prefix + "/experiment")
 app.include_router(media, prefix=prefix + "/media")
 app.include_router(namespace, prefix=prefix + "/namespace")
 app.include_router(chart, prefix=prefix + "/chart")
+app.include_router(cloud, prefix=prefix + "/cloud")

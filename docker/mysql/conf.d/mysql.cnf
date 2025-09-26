@@ -1,0 +1,47 @@
+# SwanLab-Dashboard MySQL配置文件
+
+[mysqld]
+# 基础配置
+default-authentication-plugin=mysql_native_password
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+
+# 连接配置
+max_connections=1000
+max_connect_errors=10000
+connect_timeout=60
+wait_timeout=28800
+interactive_timeout=28800
+
+# InnoDB配置
+innodb_buffer_pool_size=256M
+innodb_log_file_size=64M
+innodb_log_buffer_size=8M
+innodb_flush_log_at_trx_commit=2
+innodb_file_per_table=1
+
+# 查询缓存（MySQL 8.0已移除query cache功能）
+# query_cache_type, query_cache_size, query_cache_limit已在MySQL 8.0中移除
+
+# 临时表配置
+tmp_table_size=64M
+max_heap_table_size=64M
+
+# 慢查询日志
+slow_query_log=1
+slow_query_log_file=/var/log/mysql/mysql-slow.log
+long_query_time=2
+
+# 二进制日志
+log-bin=mysql-bin
+binlog_format=ROW
+expire_logs_days=7
+
+# 安全配置
+local_infile=0
+
+[mysql]
+default-character-set=utf8mb4
+
+[client]
+default-character-set=utf8mb4
