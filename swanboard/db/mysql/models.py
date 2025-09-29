@@ -1,0 +1,271 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+MySQL云端数据库模型定义
+与本地SQLite模型保持结构一致，但适配MySQL数据库
+"""
+
+from peewee import (
+    MySQLDatabase, Model, CharField, IntegerField, TextField,
+    ForeignKeyField, DateTimeField, BooleanField,
+    Check, DatabaseProxy
+)
+
+# Handle JSONField import for different peewee versions
+try:
+    from peewee import JSONField
+except ImportError:
+    # Fallback for older peewee versions that don't have JSONField
+    # Use TextField instead and handle JSON serialization manually
+    JSONField = TextField
+from datetime import datetime
+from typing import Dict, Any, Optional
+import json
+
+
+# 数据库代理，在连接时绑定实际数据库
+cloud_db = DatabaseProxy()
+
+
+class CloudBaseModel(Model):
+    """云端数据库基础模型类"""
+
+    class Meta:
+        database = cloud_db
+
+    @staticmethod
+    def json_to_dict(json_str: str) -> dict:
+        """将JSON字符串转换为字典"""
+        if not json_str:
+            return {}
+        try:
+            return json.loads(json_str) if isinstance(json_str, str) else json_str
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @staticmethod
+    def dict_to_json(data: dict) -> str:
+        """将字典转换为JSON字符串"""
+        if data is None:
+            return ""
+        try:
+            return json.dumps(data) if not isinstance(data, str) else data
+        except (TypeError, ValueError):
+            return ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式"""
+        result = {}
+        for field_name, field in self._meta.fields.items():
+            value = getattr(self, field_name, None)
+            if isinstance(field, DateTimeField) and value:
+                result[field_name] = value.isoformat()
+            elif isinstance(field, ForeignKeyField) and value:
+                result[field_name] = value.id
+            else:
+                result[field_name] = value
+        return result
+
+
+class CloudProject(CloudBaseModel):
+    """云端项目表"""
+
+    id = IntegerField(primary_key=True)
+    name = CharField(max_length=100, unique=True, index=True)
+    description = TextField(null=True)
+    workspace = CharField(max_length=100, index=True)  # 工作空间
+    owner = CharField(max_length=100, index=True)  # 项目所有者
+    visibility = CharField(max_length=20, default='private')  # public, private, internal
+
+    # 统计信息
+    experiment_count = IntegerField(default=0)
+
+    # 配置信息
+    settings = TextField(null=True)  # JSON格式的项目设置
+
+    # 时间戳
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'cloud_projects'
+        indexes = (
+            (('workspace', 'name'), True),  # 在同一工作空间内项目名唯一
+        )
+
+    def save(self, *args, **kwargs):
+        """保存时自动更新时间戳"""
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+
+class CloudExperiment(CloudBaseModel):
+    """云端实验表"""
+
+    id = IntegerField(primary_key=True)
+    project = ForeignKeyField(CloudProject, backref='experiments', on_delete='CASCADE')
+
+    # 实验基本信息
+    name = CharField(max_length=100, index=True)
+    run_id = CharField(max_length=100, unique=True, index=True)
+    description = TextField(null=True)
+
+    # 实验状态
+    status = IntegerField(default=0)  # -1: crashed, 0: running, 1: finished
+    visibility = BooleanField(default=True)
+
+    # 排序和标识
+    sort_order = IntegerField()
+
+    # 颜色主题
+    light_color = CharField(max_length=20, null=True)
+    dark_color = CharField(max_length=20, null=True)
+
+    # UI状态
+    pinned_opened = BooleanField(default=True)
+    hidden_opened = BooleanField(default=False)
+
+    # 扩展配置
+    settings = TextField(null=True)  # JSON格式
+    version = CharField(max_length=30)
+
+    # 时间戳
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+    finished_at = DateTimeField(null=True)
+
+    class Meta:
+        table_name = 'cloud_experiments'
+        indexes = (
+            (('project', 'name'), True),  # 同一项目内实验名唯一
+            (('project', 'sort_order'), True),  # 同一项目内排序唯一
+        )
+        constraints = [Check('sort_order >= 0')]
+
+    def save(self, *args, **kwargs):
+        """保存时自动更新时间戳"""
+        self.updated_at = datetime.now()
+        if self.status != 0 and not self.finished_at:
+            self.finished_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+
+class CloudNamespace(CloudBaseModel):
+    """云端命名空间表"""
+
+    id = IntegerField(primary_key=True)
+    experiment = ForeignKeyField(CloudExperiment, backref='namespaces', on_delete='CASCADE')
+    name = CharField(max_length=100, index=True)
+    sort_order = IntegerField(null=True)
+
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'cloud_namespaces'
+        indexes = (
+            (('experiment', 'name'), True),  # 同一实验内命名空间名唯一
+        )
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+
+class CloudChart(CloudBaseModel):
+    """云端图表表"""
+
+    id = IntegerField(primary_key=True)
+    experiment = ForeignKeyField(CloudExperiment, backref='charts', on_delete='CASCADE')
+
+    key = CharField(max_length=255, index=True)  # 图表键名
+    chart_type = CharField(max_length=50)  # 图表类型
+    reference = CharField(max_length=20)  # 引用类型: step, time, epoch等
+
+    config = TextField(null=True)  # JSON格式的图表配置
+
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'cloud_charts'
+        indexes = (
+            (('experiment', 'key'), True),  # 同一实验内图表键唯一
+        )
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+
+class CloudTag(CloudBaseModel):
+    """云端标签表"""
+
+    id = IntegerField(primary_key=True)
+    experiment = ForeignKeyField(CloudExperiment, backref='tags', on_delete='CASCADE')
+
+    name = CharField(max_length=255, index=True)
+    tag_type = CharField(max_length=50)
+    folder = CharField(max_length=255, null=True)  # 文件夹路径
+
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'cloud_tags'
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+
+class CloudSource(CloudBaseModel):
+    """云端数据源表"""
+
+    id = IntegerField(primary_key=True)
+    tag = ForeignKeyField(CloudTag, backref='sources', on_delete='CASCADE')
+    chart = ForeignKeyField(CloudChart, backref='sources', on_delete='CASCADE')
+
+    error_info = TextField(null=True)  # JSON格式的错误信息
+
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'cloud_sources'
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+
+class CloudDisplay(CloudBaseModel):
+    """云端显示配置表"""
+
+    id = IntegerField(primary_key=True)
+    chart = ForeignKeyField(CloudChart, backref='displays', on_delete='CASCADE')
+    namespace = ForeignKeyField(CloudNamespace, backref='displays', on_delete='CASCADE')
+
+    sort_order = IntegerField(null=True)
+
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'cloud_displays'
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+
+# 所有云端模型的列表，用于批量操作
+CLOUD_MODELS = [
+    CloudProject,
+    CloudExperiment,
+    CloudNamespace,
+    CloudChart,
+    CloudTag,
+    CloudSource,
+    CloudDisplay
+]
