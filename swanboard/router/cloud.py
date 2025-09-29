@@ -8,8 +8,10 @@
     云端API路由 - 支持EnhancedSwanBoardCallback的HTTP通信
 """
 
-from fastapi import APIRouter, Request, Header
-from typing import Optional
+from fastapi import APIRouter, Request, Header, HTTPException
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field
+from datetime import datetime
 
 from ..controller.cloud import (
     sync_project,
@@ -20,113 +22,232 @@ from ..controller.cloud import (
     get_project_experiments
 )
 
-router = APIRouter()
+# ================================== Pydantic Models for API Documentation ==================================
+
+class ProjectSyncRequest(BaseModel):
+    """项目同步请求模型"""
+    name: str = Field(..., description="项目名称", example="my-ml-project")
+    workspace: str = Field(..., description="工作空间名称", example="default")
+    description: Optional[str] = Field(None, description="项目描述", example="A machine learning project for image classification")
+
+class ProjectSyncResponse(BaseModel):
+    """项目同步响应模型"""
+    success: bool = Field(..., description="是否成功")
+    project_id: str = Field(..., description="项目ID", example="1")
+    name: str = Field(..., description="项目名称")
+    workspace: str = Field(..., description="工作空间名称")
+    message: Optional[str] = Field(None, description="消息")
+
+class ExperimentSyncRequest(BaseModel):
+    """实验同步请求模型"""
+    run_id: str = Field(..., description="运行ID", example="run_20241126_001")
+    name: str = Field(..., description="实验名称", example="baseline-model")
+    description: Optional[str] = Field(None, description="实验描述", example="Baseline model with default parameters")
+    colors: Optional[List[str]] = Field(None, description="实验颜色", example=["#FF6B6B", "#4ECDC4"])
+    project_id: str = Field(..., description="项目ID", example="1")
+    workspace: str = Field(..., description="工作空间名称", example="default")
+
+class ExperimentSyncResponse(BaseModel):
+    """实验同步响应模型"""
+    success: bool = Field(..., description="是否成功")
+    experiment_id: str = Field(..., description="实验ID", example="1")
+    run_id: str = Field(..., description="运行ID")
+    name: str = Field(..., description="实验名称")
+    message: Optional[str] = Field(None, description="消息")
+
+class ExperimentStatusRequest(BaseModel):
+    """实验状态更新请求模型"""
+    status: int = Field(..., description="实验状态: -1=崩溃, 0=运行中, 1=已完成", example=1)
+
+class ColumnSyncRequest(BaseModel):
+    """列/指标同步请求模型"""
+    key: str = Field(..., description="指标键名", example="loss")
+    experiment_id: str = Field(..., description="实验ID", example="1")
+    chart_type: str = Field(..., description="图表类型", example="line")
+    reference: str = Field(..., description="参考轴", example="step")
+    section_name: Optional[str] = Field("default", description="章节名称")
+    section_sort: Optional[int] = Field(0, description="章节排序")
+    kid: Optional[str] = Field(None, description="子键ID", example="loss_folder")
+    error: Optional[Dict[str, Any]] = Field(None, description="错误信息")
+
+class HealthResponse(BaseModel):
+    """健康检查响应模型"""
+    status: str = Field(..., description="服务状态", example="healthy")
+    timestamp: str = Field(..., description="时间戳")
+    database: Dict[str, Any] = Field(..., description="数据库状态")
+    api_version: str = Field(..., description="API版本", example="v1")
+
+class APIInfo(BaseModel):
+    """API信息模型"""
+    name: str = Field(..., description="API名称", example="SwanLab Cloud API")
+    version: str = Field(..., description="API版本", example="1.0.0")
+    description: str = Field(..., description="API描述")
+    endpoints: Dict[str, Dict[str, str]] = Field(..., description="端点信息")
+    authentication: Dict[str, str] = Field(..., description="认证信息")
+
+class ErrorResponse(BaseModel):
+    """错误响应模型"""
+    success: bool = Field(False, description="是否成功")
+    error: str = Field(..., description="错误信息")
+    code: Optional[int] = Field(None, description="错误代码")
+
+router = APIRouter(
+    tags=["Cloud API"],
+    responses={
+        401: {"model": ErrorResponse, "description": "认证失败"},
+        403: {"model": ErrorResponse, "description": "权限不足"},
+        500: {"model": ErrorResponse, "description": "服务器内部错误"}
+    }
+)
 
 
 # ================================== 项目相关路由 ==================================
 
-@router.post("/projects")
+@router.post(
+    "/projects",
+    response_model=ProjectSyncResponse,
+    summary="同步项目到云端",
+    description="创建或同步机器学习项目到云端存储，支持EnhancedSwanBoardCallback的项目同步功能",
+    responses={
+        200: {"model": ProjectSyncResponse, "description": "项目同步成功"},
+        400: {"model": ErrorResponse, "description": "请求参数错误"},
+    }
+)
 async def create_or_sync_project(
+    project_data: ProjectSyncRequest,
     request: Request,
-    authorization: Optional[str] = Header(None)
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
 ):
     """
-    同步项目到云端
+    ## 同步项目到云端
 
-    支持EnhancedSwanBoardCallback的项目同步功能
+    此端点允许EnhancedSwanBoardCallback将机器学习项目信息同步到云端存储。
 
-    Body:
-    {
-        "name": "project_name",
-        "workspace": "workspace_name",
-        "description": "project description"
-    }
+    ### 功能特性
+    - 自动创建新项目或更新现有项目
+    - 支持工作空间组织
+    - 项目描述和元数据存储
 
-    Returns:
-        项目ID和相关信息
+    ### 使用场景
+    - 训练开始时创建项目记录
+    - 更新项目描述和配置
+    - 组织管理机器学习项目
+
+    ### 认证
+    需要在Authorization header中提供有效的API密钥
     """
     return await sync_project(request, authorization)
 
 
 # ================================== 实验相关路由 ==================================
 
-@router.post("/experiments")
+@router.post(
+    "/experiments",
+    response_model=ExperimentSyncResponse,
+    summary="同步实验到云端",
+    description="创建或同步机器学习实验到云端存储，支持EnhancedSwanBoardCallback的实验同步功能",
+    responses={
+        200: {"model": ExperimentSyncResponse, "description": "实验同步成功"},
+        400: {"model": ErrorResponse, "description": "请求参数错误"},
+    }
+)
 async def create_or_sync_experiment(
+    experiment_data: ExperimentSyncRequest,
     request: Request,
-    authorization: Optional[str] = Header(None)
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
 ):
     """
-    同步实验到云端
+    ## 同步实验到云端
 
-    支持EnhancedSwanBoardCallback的实验同步功能
+    此端点允许EnhancedSwanBoardCallback将机器学习实验信息同步到云端存储。
 
-    Body:
-    {
-        "run_id": "run_20241126_001",
-        "name": "experiment_name",
-        "description": "experiment description",
-        "colors": ["#FF6B6B", "#4ECDC4"],
-        "project_id": "1",
-        "workspace": "workspace_name"
-    }
+    ### 功能特性
+    - 自动创建新实验或更新现有实验
+    - 支持实验元数据和配置
+    - 实验状态追踪和可视化颜色设置
 
-    Returns:
-        实验ID和相关信息
+    ### 使用场景
+    - 训练开始时创建实验记录
+    - 更新实验配置和描述
+    - 关联实验到特定项目
+
+    ### 认证
+    需要在Authorization header中提供有效的API密钥
     """
     return await sync_experiment(request, authorization)
 
 
-@router.put("/experiments/{experiment_id}/status")
+@router.put(
+    "/experiments/{experiment_id}/status",
+    summary="更新实验状态",
+    description="更新机器学习实验的运行状态，支持EnhancedSwanBoardCallback的状态同步功能",
+    responses={
+        200: {"description": "实验状态更新成功"},
+        400: {"model": ErrorResponse, "description": "请求参数错误"},
+        404: {"model": ErrorResponse, "description": "实验不存在"},
+    }
+)
 async def update_experiment_status_route(
     experiment_id: str,
+    status_data: ExperimentStatusRequest,
     request: Request,
-    authorization: Optional[str] = Header(None)
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
 ):
     """
-    更新实验状态
+    ## 更新实验状态
 
-    支持EnhancedSwanBoardCallback的状态同步功能
+    此端点允许EnhancedSwanBoardCallback更新实验的运行状态。
 
-    Body:
-    {
-        "status": 1  // -1: crashed, 0: running, 1: finished
-    }
+    ### 状态说明
+    - `-1`: 实验崩溃/失败
+    - `0`: 实验正在运行
+    - `1`: 实验已完成
 
-    Returns:
-        更新结果
+    ### 使用场景
+    - 训练开始时设置为运行状态
+    - 训练完成时标记为完成
+    - 训练出错时标记为失败
+
+    ### 认证
+    需要在Authorization header中提供有效的API密钥
     """
     return await update_experiment_status(experiment_id, request, authorization)
 
 
 # ================================== 列/指标相关路由 ==================================
 
-@router.post("/columns")
+@router.post(
+    "/columns",
+    summary="同步指标列到云端",
+    description="创建或同步机器学习实验指标列到云端存储，支持EnhancedSwanBoardCallback的指标同步功能",
+    responses={
+        200: {"description": "指标列同步成功"},
+        400: {"model": ErrorResponse, "description": "请求参数错误"},
+    }
+)
 async def create_or_sync_column(
+    column_data: ColumnSyncRequest,
     request: Request,
-    authorization: Optional[str] = Header(None)
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
 ):
     """
-    同步列/指标到云端
+    ## 同步指标列到云端
 
-    支持EnhancedSwanBoardCallback的指标同步功能
+    此端点允许EnhancedSwanBoardCallback将实验指标列信息同步到云端存储。
 
-    Body:
-    {
-        "key": "loss",
-        "experiment_id": "1",
-        "chart_type": "line",
-        "reference": "step",
-        "section_name": "default",
-        "section_sort": 0,
-        "kid": "loss_folder",
-        "error": {
-            "data_class": "str",
-            "expected": "float"
-        }
-    }
+    ### 功能特性
+    - 自动创建新指标列或更新现有列
+    - 支持多种图表类型（line, scatter, bar等）
+    - 指标分组和章节管理
+    - 错误信息记录和追踪
 
-    Returns:
-        列ID和相关信息
+    ### 使用场景
+    - 首次记录指标时创建列定义
+    - 更新指标的可视化设置
+    - 记录数据类型错误和异常
+
+    ### 认证
+    需要在Authorization header中提供有效的API密钥
     """
     return await sync_column(request, authorization)
 
@@ -163,13 +284,30 @@ async def list_project_experiments(
 
 # ================================== 健康检查 ==================================
 
-@router.get("/health")
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="云端API健康检查",
+    description="检查SwanLab Cloud API服务的健康状态，包括数据库连接状态",
+    tags=["Health Check"]
+)
 async def health_check():
     """
-    云端API健康检查
+    ## 云端API健康检查
 
-    Returns:
-        服务状态
+    检查SwanLab Cloud API服务的整体健康状态。
+
+    ### 检查项目
+    - API服务状态
+    - 数据库连接状态
+    - 文件系统访问状态
+
+    ### 返回状态
+    - `healthy`: 所有服务正常运行
+    - `unhealthy`: 存在服务异常
+
+    ### 无需认证
+    此端点不需要API密钥，可用于监控和健康检查
     """
     from ..utils import get_swanlog_dir
     from ..db import connect
@@ -202,13 +340,27 @@ async def health_check():
 
 # ================================== API信息 ==================================
 
-@router.get("/info")
+@router.get(
+    "/info",
+    response_model=APIInfo,
+    summary="获取云端API信息",
+    description="获取SwanLab Cloud API的版本信息、端点列表和认证说明",
+    tags=["API Information"]
+)
 async def api_info():
     """
-    获取云端API信息
+    ## 获取云端API信息
 
-    Returns:
-        API版本和功能信息
+    提供SwanLab Cloud API的完整信息，包括版本、端点和认证方式。
+
+    ### 包含信息
+    - API名称和版本
+    - 可用端点列表
+    - 认证方式说明
+    - 环境变量配置指南
+
+    ### 无需认证
+    此端点不需要API密钥，可用于API发现和文档
     """
     return {
         "name": "SwanLab Cloud API",

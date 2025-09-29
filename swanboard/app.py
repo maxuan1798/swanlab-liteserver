@@ -20,8 +20,39 @@ from .middleware.common import (
 # 响应路径
 from .settings import ASSETS
 
-# 服务全局对象
-app = FastAPI()
+# 服务全局对象 - 配置OpenAPI文档
+app = FastAPI(
+    title="SwanLab-Dashboard API",
+    description="""
+    SwanLab-Dashboard API provides comprehensive endpoints for managing machine learning experiments,
+    projects, and cloud synchronization.
+
+    ## Features
+
+    * **Projects**: Create and manage ML projects
+    * **Experiments**: Track and visualize ML experiments
+    * **Charts**: Generate and retrieve experiment charts
+    * **Media**: Handle experiment media files
+    * **Cloud Sync**: Synchronize experiments to cloud storage
+    * **Namespaces**: Organize projects by namespace
+
+    ## Authentication
+
+    Some endpoints require API key authentication via the `Authorization` header.
+    """,
+    version="1.0.0",
+    contact={
+        "name": "SwanLab Team",
+        "url": "https://github.com/SwanHubX/SwanLab",
+    },
+    license_info={
+        "name": "Apache 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    },
+    docs_url="/api/docs",  # Swagger UI路径
+    redoc_url="/api/redoc", # ReDoc路径
+    openapi_url="/api/v1/openapi.json"  # OpenAPI schema路径
+)
 
 # 注册前端静态文件路径
 static_path = "/assets"

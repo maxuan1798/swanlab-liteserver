@@ -2,9 +2,8 @@
 Cloud API module for MySQL-based cloud synchronization
 """
 
-from .mysql_models import *
-from .cloud_sync import CloudSyncManager
-from .mysql_config import MySQLConfig
+from ..db.mysql import *
+from .cloud_service import CloudSyncManager
 
 __all__ = [
     'CloudSyncManager',
@@ -15,5 +14,9 @@ __all__ = [
     'CloudTag',
     'CloudNamespace',
     'CloudSource',
-    'CloudDisplay'
+    'CloudDisplay',
+    'CloudBaseModel',
+    'CLOUD_MODELS',
+    'connect_cloud_db',
+    'is_cloud_db_connected'
 ]

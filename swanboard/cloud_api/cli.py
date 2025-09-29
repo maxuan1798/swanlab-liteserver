@@ -10,7 +10,7 @@ import os
 from typing import Optional
 from .mysql_config import MySQLConfig
 from .mysql_connection import connect_cloud_db, disconnect_cloud_db, test_cloud_db_connection
-from .cloud_sync import CloudSyncManager
+from .cloud_service import CloudSyncManager
 from .mysql_models import CLOUD_MODELS
 
 

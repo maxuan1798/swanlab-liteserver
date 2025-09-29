@@ -80,7 +80,7 @@ class EnhancedSwanBoardCallback(SwanBoardCallback):
 
         try:
             url = f"{self.cloud_api_base.rstrip('/')}/{endpoint.lstrip('/')}"
-
+            swanlog.info(f"HTTP cloud sync request - URL: {url}")
             # 添加时间戳
             data['timestamp'] = datetime.now().isoformat()
 
@@ -99,8 +99,9 @@ class EnhancedSwanBoardCallback(SwanBoardCallback):
             # 解析响应
             if response.content:
                 response_data = response.json()
+                swanlog.info(f"HTTP cloud sync response - response_data: {response_data}")
                 # 检查API响应格式
-                if response_data.get('success'):
+                if response_data.get('code') == 0:
                     return response_data.get('data', {})
                 else:
                     swanlog.warning(f"Cloud API error: {response_data.get('message', 'Unknown error')}")

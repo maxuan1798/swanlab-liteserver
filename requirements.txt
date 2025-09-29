@@ -6,7 +6,7 @@ fastapi>=0.110.1
 uvicorn>=0.14.0
 
 # database
-peewee
+peewee>=3.13.0
 ujson
 
 # MySQL support for cloud sync

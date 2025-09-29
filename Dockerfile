@@ -38,4 +38,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:5173/api/v1/cloud/health || exit 1
 
 # 启动命令
-CMD ["python", "-m", "uvicorn", "swanboard.app:app", "--host", "0.0.0.0", "--port", "5173"]
+CMD ["python", "-m", "uvicorn", "swanboard.app:app", "--host", "0.0.0.0", "--port", "5173", "--log-level", "debug"]
