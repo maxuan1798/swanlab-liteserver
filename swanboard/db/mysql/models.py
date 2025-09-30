@@ -70,6 +70,9 @@ class CloudBaseModel(Model):
 class CloudProject(CloudBaseModel):
     """云端项目表"""
 
+    # 默认的项目id应该是1
+    DEFAULT_PROJECT_ID = 1
+
     id = IntegerField(primary_key=True)
     name = CharField(max_length=100, unique=True, index=True)
     description = TextField(null=True)
@@ -101,6 +104,13 @@ class CloudProject(CloudBaseModel):
 
 class CloudExperiment(CloudBaseModel):
     """云端实验表"""
+
+    # 实验运行时状态符
+    RUNNING_STATUS = 0
+    # 实验停止时状态符
+    STOPPED_STATUS = -1
+    # 实验结束时状态符
+    FINISHED_STATUS = 1
 
     id = IntegerField(primary_key=True)
     project = ForeignKeyField(CloudProject, backref='experiments', on_delete='CASCADE')
