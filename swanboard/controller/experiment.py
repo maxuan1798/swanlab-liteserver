@@ -1,52 +1,85 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-r"""
+"""
 @DATE: 2024-01-20 21:21:45
-@File: swanlab\server\controller\experiment.py
+@File: swanboard/controller/experiment.py
 @IDE: vscode
 @Description:
-    实验相关 api 的处理函数
+    实验相关 API 的处理函数 - 云端版本
+    使用 CloudSyncManager 和Repository 模式
 """
 
 import os
-import ujson
-import shutil
-from datetime import datetime
-from ..module.resp import SUCCESS_200, DATA_ERROR_500, NOT_FOUND_404
-from fastapi import Request
-from urllib.parse import quote
-from ..settings import (
-    get_logs_dir,
-    get_exp_dir,
-    get_config_path,
-    get_console_dir,
-    get_meta_path,
-    get_requirements_path,
-)
-import yaml
-from swanboard.utils import swanlog
-from swankit.env import create_time
-from .db import (
-    Project,
-    Experiment,
-    Chart,
-    Tag,
-    connect,
-    NotExistedError,
-)
-from .utils import (
-    get_exp_charts,
-    clear_field,
-    read_tag_data,
-    get_tag_files,
-    LOGS_CONFIGS,
-    lttb,
+from typing import Dict, Any, Optional, List
+from fastapi import Request, HTTPException, Header
+
+# 使用CloudSyncManager和repositories处理业务逻辑
+from ..cloud_api import CloudSyncManager
+from ..repositories import (
+    connection_manager, project_repository, experiment_repository, chart_repository, clickhouse_repository
 )
 
-__to_list = Experiment.search2list
+from ..db.mysql import (
+    CloudProject as Project,
+    CloudExperiment as Experiment
+)
 
-# ---------------------------------- 通用 ----------------------------------
+# 响应模块
+from ..module.resp import (
+    SUCCESS_200, DATA_ERROR_500, BAD_REQUEST_400,
+    NOT_FOUND_404, CONFLICT_409, UNAUTHORIZED_401
+)
 
+# 工具函数
+from ..utils import swanlog, check_desc_format, COLOR_LIST
+from .utils.tag import lttb
+
+# 图表工具函数（兼容原有的图表数据结构）
+def get_exp_charts_compatible(experiment_id: int):
+    """
+    获取实验图表数据，兼容原有的数据结构
+    云端版本简化实现
+    """
+    try:
+        # 获取实验的图表信息
+        charts = chart_repository.get_experiment_charts(experiment_id)
+
+        # 转换为兼容的格式
+        chart_list = []
+        for chart in charts:
+            chart_item = {
+                "id": chart.get("id"),
+                "key": chart.get("key", ""),
+                "name": chart.get("key", ""),
+                "type": chart.get("chart_type", "line"),
+                "reference": chart.get("reference", "step"),
+                "sort": chart.get("sort", 0),
+                "status": chart.get("status", 0),
+                "experiment_id": experiment_id,
+                "project_id": None,
+                "error": {},
+                "source": [chart.get("key", "")],
+                "multi": False,
+                "source_map": {chart.get("key", ""): experiment_id}
+            }
+            chart_list.append(chart_item)
+
+        # 简化的命名空间数据
+        namespace_list = [
+            {
+                "id": 1,
+                "name": "default",
+                "charts": [chart["id"] for chart in chart_list],
+                "opened": True,
+                "experiment_id": experiment_id,
+                "project_id": None,
+            }
+        ]
+
+        return chart_list, namespace_list
+    except Exception as e:
+        swanlog.error(f"Failed to get experiment charts: {e}")
+        return [], []
 
 # 默认项目 id
 DEFAULT_PROJECT_ID = Project.DEFAULT_PROJECT_ID
@@ -54,504 +87,641 @@ DEFAULT_PROJECT_ID = Project.DEFAULT_PROJECT_ID
 RUNNING_STATUS = Experiment.RUNNING_STATUS
 
 
-# ---------------------------------- 工具函数 ----------------------------------
+# ================================== 实验信息获取 ==================================
 
-
-def __get_exp_dir_by_id(experiment_id: int) -> str:
-    """通过 experiment_id 获取实验目录
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一id
-
-    Returns
-    -------
-    str
-        实验目录路径
+def get_experiment_info(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
     """
+    获取实验信息
 
-    return get_exp_dir(Experiment.get(experiment_id).run_id)
+    GET /api/v1/experiments/{experiment_id}
 
-
-def __get_logs_dir_by_id(experiment_id: int) -> str:
-    """通过 experiment_id 获取实验 保存目录
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一id
-
-    Returns
-    -------
-    str
-        实验 logs 目录路径
+    Returns:
+        实验信息和相关数据
     """
-    return get_logs_dir(Experiment.get(experiment_id).run_id)
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
-
-def __get_console_dir_by_id(experiment_id: int) -> str:
-    """通过 experiment_id 获取实验 console 保存目录
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一id
-
-    Returns
-    -------
-    str
-        实验 console 目录路径
-    """
-
-    return get_console_dir(Experiment.get(experiment_id).run_id)
-
-
-def __get_requirements_path_by_id(experiment_id: int):
-    """通过 experiment_id 获取实验依赖存储路径
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一id
-
-    Returns
-    -------
-    str
-        实验依赖存储路径
-    """
-
-    return get_requirements_path(Experiment.get(experiment_id).run_id)
-
-
-# ---------------------------------- 路由对应的处理函数 ----------------------------------
-
-
-# 获取实验信息
-def get_experiment_info(experiment_id: int):
-    """获取实验信息
-    1. 数据库中获取实验的基本信息
-    2. 从实验目录获取配置信息
-    3. 获取实验元信息
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一id
-    """
-
-    experiment = Experiment.get(experiment_id).__dict__()
-    experiment.pop("project_id")
-
-    # 加载实验配置
-    config_path = get_config_path(experiment["run_id"])
-    if os.path.exists(config_path):
-        with open(config_path, "r+", encoding="utf-8") as f:
-            experiment["config"] = yaml.load(f, Loader=yaml.FullLoader)
-
-    # 加载实验元信息
-    meta_path = get_meta_path(experiment["run_id"])
-    if os.path.exists(meta_path) and not os.stat(meta_path).st_size == 0:
-        with open(meta_path, "r+", encoding="utf-8") as f:
-            experiment["system"] = ujson.load(f)
-    else:
-        experiment["system"] = {}
-    return SUCCESS_200(experiment)
-
-
-# 获取表单数据
-def get_tag_data(experiment_id: int, tag: str) -> dict:
-    """获取表单数据
-    根据实验id得到实验的运行id，然后根据运行id和tag得到实验的数据
-
-    Parameters
-    ----------
-    experiment_id: int
-        实验唯一id，路径传参
-    tag: str
-        表单标签，路径传参，已经进行了 URIComponent 编码
-    """
-    # ---------------------------------- 前置处理 ----------------------------------
-    tag_folder = Tag.filter(Tag.name == tag, Tag.experiment_id == experiment_id).first().folder
-    # 获取tag对应的存储目录
     try:
-        tag_path: str = os.path.join(__get_logs_dir_by_id(experiment_id), tag_folder)
-    except NotExistedError:
-        return NOT_FOUND_404("experiment not found")
-    if not os.path.exists(tag_path):
-        return NOT_FOUND_404("tag not found")
-    # 获取目录下存储的所有数据
-    tag_data: list = []
-    # ---------------------------------- 读取文件数据 ----------------------------------
-    current_logs = get_tag_files(tag_path, LOGS_CONFIGS)
-    for file in current_logs:
-        tag_data = tag_data + read_tag_data(os.path.join(tag_path, file))
-    # ---------------------------------- 返回所有数据 ----------------------------------
-    # 如果数据为空，返回空列表
-    if len(tag_data) == 0:
-        return SUCCESS_200(data={"sum": 0, "list": [], "experiment_id": experiment_id})
-    # 根据index升序排序
-    tag_data.sort(key=lambda x: int(x["index"]))
-    # tag_data 的 最后一个数据增加一个字段_last = True
-    tag_data[-1]["_last"] = True
-    # 获取_summary文件
-    summary_path = os.path.join(tag_path, "_summary.json")
-    if os.path.exists(summary_path):
-        with open(summary_path, "r", encoding="utf-8") as f:
-            summary = ujson.load(f)
-            max_value = summary.get("max", None)
-            min_value = summary.get("min", None)
-    else:
-        # COMPAT 如果_summary文件不存在，手动获取最大值和最小值
-        warn = f"Summary file of tag '{tag}' not found, SwanLab will automatically get the maximum and minimum values."
-        swanlog.warning(warn)
-        # 遍历tag_data，获取最大值和最小值
-        # 提取 data 字段的值
-        data_values = [entry["data"] for entry in tag_data]
-        # 获取最大值和最小值
-        max_value = max(data_values)
-        min_value = min(data_values)
-    return SUCCESS_200(
-        data={
-            "sum": len(tag_data),
-            "max": max_value,
-            "min": min_value,
-            "list": lttb(tag_data),
-            # 标注此数据隶属于哪个实验
-            "experiment_id": experiment_id,
-        }
-    )
+        # 获取实验信息
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        swanlog.info(f"Experiment with id {experiment_id} found")
+
+        # 构建响应数据
+        experiment_data = experiment_repository.to_dict(experiment)
+        if not experiment_data:
+            return DATA_ERROR_500("Failed to convert experiment to dict")
+
+        # 移除不需要的字段
+        experiment_data.pop("project_id", None)
+
+        # 云端版本不需要本地配置文件，相关配置存储在数据库中
+        experiment_data["config"] = {}
+        experiment_data["system"] = {}
+
+        return SUCCESS_200(experiment_data)
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        swanlog.error(f"Get experiment info error: {e}")
+        swanlog.error(f"Full traceback: {error_details}")
+        return DATA_ERROR_500(f"Failed to get experiment info: {e}")
 
 
-# 获取实验状态
-def get_experiment_status(experiment_id: int):
-    """获取实验状态以及实验图表配置，用于实时更新实验状态
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一id，路径传参
+def get_tag_data(
+    experiment_id: int,
+    tag: str,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
     """
+    获取标签数据（从 ClickHouse 获取）
 
-    experiment = Experiment.get(experiment_id)
-    chart_list, namespace_list = get_exp_charts(experiment_id)
+    GET /api/v1/experiments/{experiment_id}/tag/{tag}
 
-    return SUCCESS_200(
-        {
+    Returns:
+        标签相关的数据信息
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 获取实验的 run_id（使用实验目录名作为 run_id）
+        # 注意：这里假设 experiment 对象有 run_dir 或类似属性
+        # 你可能需要根据实际的数据模型调整
+        run_id = getattr(experiment, 'run_dir', None) or getattr(experiment, 'run_id', None)
+        if not run_id:
+            # 如果实验对象没有 run_id，尝试从数据库或其他地方获取
+            # 这里使用一个后备方案
+            swanlog.warning(f"Experiment {experiment_id} has no run_id, using experiment_id as fallback")
+            run_id = str(experiment_id)
+
+        # 从 ClickHouse 获取列信息
+        column = clickhouse_repository.get_column_by_run_and_key(run_id, tag)
+        if not column:
+            return NOT_FOUND_404(f"Tag '{tag}' not found for experiment {experiment_id}")
+
+        column_id = column['column_id']
+
+        # 获取指标数据
+        tag_data = clickhouse_repository.get_metric_data(run_id, column_id)
+
+        # 如果数据为空，返回空列表
+        if len(tag_data) == 0:
+            return SUCCESS_200(data={
+                "sum": 0,
+                "max": None,
+                "min": None,
+                "list": [],
+                "experiment_id": experiment_id
+            })
+
+        # 根据 index 升序排序（已经在查询中按 step 排序）
+        # tag_data 的最后一个数据增加一个字段 _last = True
+        tag_data[-1]["_last"] = True
+
+        # 获取最大值和最小值
+        summary = clickhouse_repository.get_metric_summary(run_id, column_id)
+        max_value = summary.get('max', None)
+        min_value = summary.get('min', None)
+
+        # 应用 LTTB 降采样
+        sampled_data = lttb(tag_data)
+
+        return SUCCESS_200(
+            data={
+                "sum": len(tag_data),
+                "max": max_value,
+                "min": min_value,
+                "list": sampled_data,
+                # 标注此数据隶属于哪个实验
+                "experiment_id": experiment_id,
+            }
+        )
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        swanlog.error(f"Get tag data error: {e}")
+        swanlog.error(f"Full traceback: {error_details}")
+        return DATA_ERROR_500(f"Failed to get tag data: {e}")
+
+
+def get_experiment_status(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    获取实验状态以及实验图表配置，用于实时更新实验状态
+
+    GET /api/v1/experiments/{experiment_id}/status
+
+    Returns:
+        实验状态和图表配置信息
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 获取实验信息
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 获取实验的图表信息（使用兼容格式）
+        chart_list, namespace_list = get_exp_charts_compatible(experiment_id)
+
+        return SUCCESS_200({
             "status": experiment.status,
-            "update_time": experiment.update_time,
-            "finish_time": experiment.finish_time,
+            "update_time": experiment.updated_at.isoformat() if experiment.updated_at else None,
+            "finish_time": experiment.finished_at.isoformat() if experiment.finished_at else None,
             "charts": {
-                "charts": clear_field(chart_list, "experiment_id"),
+                "charts": chart_list,
                 "namespaces": namespace_list,
             },
-        }
-    )
+        })
+
+    except Exception as e:
+        swanlog.error(f"Get experiment status error: {e}")
+        return DATA_ERROR_500(f"Failed to get experiment status: {e}")
 
 
-# 获取实验的总结数据
-def get_experiment_summary(experiment_id: int) -> dict:
-    """获取实验的总结数据——每个tag的最后一个setp的data
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验id
-
-    Returns
-    -------
-    dict:
-        summaries: list
-            每个tag的最后一个数据
+def get_experiment_summary(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
     """
+    获取实验的总结数据——每个标签的最新数据
 
-    experiment = Experiment.get_by_id(experiment_id)
-    # 通过外键反链获取实验下的所有tag
-    tag_list = [(tag["folder"], tag["name"]) for tag in __to_list(experiment.tags)]
-    experiment_path = __get_logs_dir_by_id(experiment_id)
-    # 通过目录结构获取所有正常的tag
-    tags = [f for f in os.listdir(experiment_path) if os.path.isdir(os.path.join(experiment_path, f))]
-    # 实验总结数据
-    summaries = []
-    for tag_key, tag_name in tag_list:
-        # 如果 tag 记录在数据库，但是没有对应目录，说明 tag 有问题
-        # 所以 tags 是 tag_list 的子集，出现异常的 tag 会记录在数据库但不会添加到目录结构中
-        if tag_key not in tags:
-            summaries.append({"key": tag_name, "value": "TypeError"})
-            continue
-        tag_path = os.path.join(experiment_path, tag_key)
-        # 获取 tag 目录下的所有存储的日志文件
-        logs = get_tag_files(tag_path, LOGS_CONFIGS)
-        # 打开 tag 目录下最后一个存储文件，获取最后一条数据
-        with open(os.path.join(tag_path, logs[-1]), encoding="utf-8") as f:
-            lines = f.readlines()
-            # 最后一行数据，如果为空，取倒数第二行
-            data = lines[-1] if len(lines[-1]) else lines[-2]
-            last_data = ujson.loads(data)
-            summaries.append({"key": tag_name, "value": last_data["data"]})
-    # 获取数据库记录时在实验下的排序
-    sorts = {item["name"]: item["sort"] for item in __to_list(experiment.tags)}
-    # 新版添加排序后的 tag，这里进行排序
-    temp = [0] * len(summaries)
-    for item in summaries:
-        temp[sorts[item["key"]]] = item
-    summaries = temp
-    return SUCCESS_200({"summaries": summaries})
+    GET /api/v1/experiments/{experiment_id}/summary
 
-
-MAX_NUM = 6000
-
-
-# 获取实验最近日志
-def get_recent_logs(experiment_id):
-    """一下返回最多 MAX_NUM 条打印记录
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一ID
-
-    Returns
-    -------
-    dict :
-        recent: List[str]
-            0: 截止处日志文件
-            1: 开始处日志文件
-        logs: List[str]
-            日志列表
+    Returns:
+        实验总结信息
     """
-
-    console_path: str = __get_console_dir_by_id(experiment_id)
-    # 是否存在
-    if not os.path.exists(console_path):
-        return NOT_FOUND_404("Log Folder not Found")
-    consoles: list = [f for f in os.listdir(console_path)]
-    # 含有error.log，在返回值中带上其中的错误信息
-    error = None
-    if "error.log" in consoles:
-        with open(os.path.join(console_path, "error.log"), mode="r", encoding="utf-8") as f:
-            error = f.read().split("\n")
-        # 在consoles里删除error.log
-        consoles.remove("error.log")
-    # 没有日志，也没有错误日志
-    if len(consoles) == 0 and error is None:
-        return NOT_FOUND_404("No Logs Found")
-    # 如果只有错误日志，直接返回
-    elif len(consoles) == 0 and error:
-        return SUCCESS_200({"error": error})
-
-    total: int = len(consoles)
-    # # 如果 total 大于 1, 按照时间排序
-    if total > 1:
-        consoles = sorted(consoles, key=lambda x: datetime.strptime(x[:-4], "%Y-%m-%d"), reverse=True)
-    logs = []
-    # # current_page = total
-    for index, f in enumerate(consoles, start=1):
-        with open(os.path.join(console_path, f), mode="r", encoding="utf-8") as log:
-            logs = log.read().split("\n") + logs
-            # 如果当前收集到的数据超过限制，退出循环
-            # if len(logs) >= MAX_NUM:
-            #     # current_page = index
-            #     break
-    # 如果 logs 内容为空
-    if len(logs) == 0:
-        return NOT_FOUND_404("No Logs Found")
-
-    # logs = logs[:MAX_NUM]
-    end = (logs[-1] if not logs[-1] == "" else logs[-2]).split(" ")[0]
-    data = {
-        "recent": [logs[0].split(" ")[0], end],
-        "logs": logs,
-    }
-    if error is not None:
-        data["error"] = error
-    # 返回最新的 MAX_NUM 条记录
-    return SUCCESS_200(data)
-
-
-# 获取图表信息
-def get_experimet_charts(experiment_id: int):
-    """获取图表信息
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一 ID
-
-    Returns
-    -------
-    dict :
-        _sum: integer
-        charts: List[dict]
-        namesapces: List[dict]
-    """
-    chart_list, namespace_list = get_exp_charts(experiment_id)
-
-    return SUCCESS_200(
-        {
-            "charts": clear_field(chart_list, "experiment_id"),
-            "namespaces": namespace_list,
-        }
-    )
-
-
-# 更改项目信息
-async def update_experiment_info(experiment_id: int, request: Request):
-    """修改实验的信息
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验id
-    body : Body
-        name: str
-            实验名称
-        description: str
-            实验描述
-
-    Returns
-    -------
-    dict :
-        name: str
-        description: str
-    """
-
-    db = connect()
-    body = await request.json()
-    body["name"] = body["name"].strip()
-    with db.atomic():
-        experiment = Experiment.get(experiment_id)
-        experiment.name = body.get("name")
-        experiment.description = body.get("description")
-        experiment.save()
-
-    db.close()
-
-    return SUCCESS_200(body)
-
-
-# 删除实验
-def delete_experiment(experiment_id: int):
-    """删除实验
-
-    注意，需要先判断当前实验是否正在运行中，不可删除运行中的实验
-    同时，需要删除所有表中含有该 experiment_id 的行
-
-    Parameters
-    ----------
-    experiment_id : Int
-        实验唯一ID
-
-    Returns
-    -------
-    project : Dictionary
-        删除实验后的项目信息，提供给前端更新界面
-
-    TODO: 该怎么删才能高效删干净
-    """
-
-    # 先删除实验目录
-    experiment_path = __get_exp_dir_by_id(experiment_id)
-    shutil.rmtree(experiment_path)
-    # 看看该实验下有哪儿些 tag
-    tags = Tag.filter(Tag.experiment_id == experiment_id)
-    tag_names = [tag["name"] for tag in __to_list(tags)]
-    # 检查多实验图表是否有需要删除的
-    project_id = Experiment.get_by_id(experiment_id).project_id.id
-    # 找到属于多实验且与该实验相关的图表
-    charts = Chart.filter(Chart.project_id == project_id, Chart.name.in_(tag_names))
-
-    db = connect()
-    with db.atomic():
-        # 必须先清除数据库中的实验数据
-        Experiment.delete().where(Experiment.id == experiment_id).execute()
-        # 图表无 source 的需要删除
-        del_list = []
-        for chart in charts:
-            if chart.sources.count() == 0:
-                del_list.append(chart.id)
-        Chart.delete().where(Chart.id.in_(del_list)).execute()
-    db.commit()
-
-    return SUCCESS_200({"experiment_id": experiment_id})
-
-
-# 停止实验
-def stop_experiment(experiment_id: int):
-    """停止实验
-
-    Parameters
-    ----------
-    experiment_id : Int
-        实验唯一ID
-
-    Returns
-    -------
-    project : Dictionary
-        停止实验后的项目信息，提供给前端更新界面
-    """
-    experiment: Experiment = Experiment.get(experiment_id)
-    experiment.update_status(Experiment.STOPPED_STATUS)
-
-    return SUCCESS_200(
-        {
-            "id": experiment_id,
-            "status": Experiment.STOPPED_STATUS,
-            "finish_time": create_time(),
-        }
-    )
-
-
-# 获取实验依赖
-def get_experiment_requirements(experiment_id: int):
-    """获取实验依赖
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验唯一ID
-
-    Returns
-    -------
-    dict :
-        requirements: list
-            每个依赖项为一行，以列表的形式返回
-    """
-
-    path = __get_requirements_path_by_id(experiment_id)
-    if not os.path.exists(path):
-        return DATA_ERROR_500("failed to find requirements")
-    with open(path, encoding="utf-8") as f:
-        requirements = f.read()
-
-    return SUCCESS_200({"requirements": requirements.split("\n")})
-
-
-# 修改实验是否可见
-def change_experiment_visibility(experiment_id: int, show: bool):
-    """修改实验是否可见
-
-    Parameters
-    ----------
-    experiment_id : int
-        实验id
-    show : bool
-        在多实验对比图表中，该实验是否可见，true -> 1 , false -> 0
-
-    Returns
-    -------
-    experiment : dict
-        当前实验信息
-    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
-        experiment = Experiment.get_by_id(experiment_id)
-    except NotExistedError:
-        return NOT_FOUND_404("Experiment with id {} does not exist.".format(experiment_id))
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
 
-    if show:
-        experiment.show = 1
-    else:
-        experiment.show = 0
-    experiment.save()
-    return SUCCESS_200({"experiment": experiment.__dict__()})
+        # 获取实验的图表信息
+        charts = chart_repository.get_experiment_charts(experiment_id)
+
+        # 构建总结数据
+        summaries = []
+        for chart in charts:
+            # 云端版本中，总结数据从数据库中获取
+            summaries.append({
+                "key": chart["key"],
+                "value": f"Latest value for {chart['key']}"  # 这里可以扩展为实际的最新值
+            })
+
+        return SUCCESS_200({"summaries": summaries})
+
+    except Exception as e:
+        swanlog.error(f"Get experiment summary error: {e}")
+        return DATA_ERROR_500(f"Failed to get experiment summary: {e}")
+
+
+def get_experiment_charts(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    获取实验图表信息
+
+    GET /api/v1/experiments/{experiment_id}/charts
+
+    Returns:
+        实验图表数据
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 获取实验的图表信息（使用兼容格式）
+        chart_list, namespace_list = get_exp_charts_compatible(experiment_id)
+
+        return SUCCESS_200({
+            "charts": chart_list,
+            "namespaces": namespace_list,
+        })
+
+    except Exception as e:
+        swanlog.error(f"Get experiment charts error: {e}")
+        return DATA_ERROR_500(f"Failed to get experiment charts: {e}")
+
+
+def get_recent_logs(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    获取实验最近日志（从 ClickHouse 获取）
+
+    GET /api/v1/experiments/{experiment_id}/recent_log
+
+    Returns:
+        实验日志信息
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 获取 run_id
+        run_id = getattr(experiment, 'run_dir', None) or getattr(experiment, 'run_id', None)
+        if not run_id:
+            swanlog.warning(f"Experiment {experiment_id} has no run_id, using experiment_id as fallback")
+            run_id = str(experiment_id)
+
+        # 从 ClickHouse 获取最近的日志日期
+        recent_dates = clickhouse_repository.get_recent_log_dates(run_id)
+
+        # 获取最近的日志内容
+        logs = clickhouse_repository.get_logs(run_id, limit=100)
+
+        # 格式化日志消息
+        log_messages = [log.get('message', '') for log in logs]
+
+        return SUCCESS_200({
+            "recent": recent_dates if recent_dates else [],
+            "logs": log_messages if log_messages else ["No logs available"]
+        })
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        swanlog.error(f"Get recent logs error: {e}")
+        swanlog.error(f"Full traceback: {error_details}")
+        return DATA_ERROR_500(f"Failed to get recent logs: {e}")
+
+
+def get_experiment_requirements(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    获取实验依赖（从 ClickHouse 获取）
+
+    GET /api/v1/experiments/{experiment_id}/requirements
+
+    Returns:
+        实验依赖信息
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 获取 run_id
+        run_id = getattr(experiment, 'run_dir', None) or getattr(experiment, 'run_id', None)
+        if not run_id:
+            swanlog.warning(f"Experiment {experiment_id} has no run_id, using experiment_id as fallback")
+            run_id = str(experiment_id)
+
+        # 从 ClickHouse 获取运行时信息
+        runtime_info = clickhouse_repository.get_runtime_info(run_id)
+
+        if not runtime_info:
+            return SUCCESS_200({
+                "requirements": ["# No requirements information available"],
+                "python_version": None,
+                "platform": None,
+                "cuda_version": None
+            })
+
+        # 解析 requirements 文件内容
+        requirements_content = runtime_info.get('requirements', '')
+        if requirements_content:
+            # 如果是文件名，返回提示；如果是内容，按行分割
+            if '\n' in requirements_content:
+                requirements_lines = requirements_content.split('\n')
+            else:
+                # 可能是文件名，返回提示
+                requirements_lines = [f"# Requirements file: {requirements_content}"]
+        else:
+            requirements_lines = ["# No requirements information available"]
+
+        return SUCCESS_200({
+            "requirements": requirements_lines,
+            "python_version": runtime_info.get('python_version'),
+            "platform": runtime_info.get('platform'),
+            "cuda_version": runtime_info.get('cuda_version'),
+            "conda": runtime_info.get('conda'),
+            "metadata": runtime_info.get('metadata'),
+            "config": runtime_info.get('config')
+        })
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        swanlog.error(f"Get experiment requirements error: {e}")
+        swanlog.error(f"Full traceback: {error_details}")
+        return DATA_ERROR_500(f"Failed to get experiment requirements: {e}")
+
+
+# 为了兼容性，添加拼写错误的函数名
+def get_experimet_charts(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    获取实验图表信息 (兼容拼写错误的函数名)
+
+    这是 get_experiment_charts 的别名
+    """
+    return get_experiment_charts(experiment_id, authorization)
+
+
+# ================================== 实验信息修改 ==================================
+
+def update_experiment_info(
+    experiment_id: int,
+    request: Request,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    修改实验信息
+
+    PUT /api/v1/experiments/{experiment_id}
+
+    Body:
+    {
+        "name": "new_experiment_name",
+        "description": "new experiment description"
+    }
+
+    Returns:
+        更新后的实验信息
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        body = request.json()
+
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 验证和格式化数据
+        updates = {}
+        if "name" in body:
+            updates["name"] = body["name"].strip()
+
+        if "description" in body:
+            updates["description"] = check_desc_format(body["description"], False)
+
+        # 更新实验信息
+        updated_experiment = experiment_repository.update(experiment, **updates)
+        if not updated_experiment:
+            return DATA_ERROR_500("Failed to update experiment")
+
+        swanlog.info(f"Updated experiment {experiment_id}: {updates}")
+
+        return SUCCESS_200({
+            "updates": updates,
+            "experiment": experiment_repository.to_dict(updated_experiment)
+        })
+
+    except Exception as e:
+        swanlog.error(f"Update experiment info error: {e}")
+        return DATA_ERROR_500(f"Failed to update experiment info: {e}")
+
+
+def update_experiment_status(
+    experiment_id: int,
+    request: Request,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    更新实验状态
+
+    PUT /api/v1/experiments/{experiment_id}/status
+
+    Body:
+    {
+        "status": 1,  // -1: crashed, 0: running, 1: finished
+        "error": "error message"  // 可选，实验出错时的错误信息
+    }
+
+    Returns:
+        更新结果
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        body = request.json()
+
+        if 'status' not in body:
+            return BAD_REQUEST_400("Missing required field: status")
+
+        status = int(body['status'])
+        error = body.get('error')
+
+        # 验证状态值
+        if status not in [-1, 0, 1]:
+            return BAD_REQUEST_400("Invalid status value. Must be -1, 0, or 1")
+
+        # 使用experiment_repository直接更新状态
+        success = experiment_repository.update_status(
+            experiment_id=experiment_id,
+            status=status,
+            error=error
+        )
+
+        if not success:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found or update failed")
+
+        # 获取更新后的实验信息
+        experiment = experiment_repository.get_by_id(experiment_id)
+        status_text = {-1: "crashed", 0: "running", 1: "finished"}[status]
+
+        return SUCCESS_200({
+            "experiment_id": str(experiment_id),
+            "status": status,
+            "status_text": status_text,
+            "updated_at": experiment.updated_at.isoformat() if experiment and experiment.updated_at else None
+        })
+
+    except Exception as e:
+        swanlog.error(f"Status update error: {e}")
+        return DATA_ERROR_500(f"Status update failed: {e}")
+
+
+# ================================== 实验删除 ==================================
+
+def delete_experiment(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    删除实验
+
+    DELETE /api/v1/experiments/{experiment_id}
+
+    Returns:
+        删除结果
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 检查实验是否正在运行
+        if experiment.status == RUNNING_STATUS:
+            return CONFLICT_409("Can't delete experiment since it is running")
+
+        # 获取相关的图表信息用于清理
+        charts = chart_repository.get_experiment_charts(experiment_id)
+
+        # 删除实验（这会级联删除相关的图表、标签等）
+        success = experiment_repository.delete(experiment)
+        if not success:
+            return DATA_ERROR_500("Failed to delete experiment from database")
+
+        swanlog.info(f"Deleted experiment {experiment_id} with {len(charts)} charts")
+
+        return SUCCESS_200({
+            "deleted_experiment_id": str(experiment_id),
+            "deleted_charts_count": len(charts)
+        })
+
+    except Exception as e:
+        swanlog.error(f"Delete experiment error: {e}")
+        return DATA_ERROR_500(f"Failed to delete experiment: {e}")
+
+
+# ================================== 实验控制 ==================================
+
+def stop_experiment(
+    experiment_id: int,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    停止实验
+
+    PUT /api/v1/experiments/{experiment_id}/stop
+
+    Returns:
+        停止实验后的状态信息
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 更新实验状态为停止
+        from datetime import datetime
+        updated_experiment = experiment_repository.update(
+            experiment,
+            status=-1,  # 停止状态
+            finished_at=datetime.now()
+        )
+
+        if not updated_experiment:
+            return DATA_ERROR_500("Failed to stop experiment")
+
+        return SUCCESS_200({
+            "id": experiment_id,
+            "status": -1,
+            "finished_at": updated_experiment.finished_at.isoformat() if updated_experiment.finished_at else None,
+        })
+
+    except Exception as e:
+        swanlog.error(f"Stop experiment error: {e}")
+        return DATA_ERROR_500(f"Failed to stop experiment: {e}")
+
+
+def change_experiment_visibility(
+    experiment_id: int,
+    show: bool,
+    authorization: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    修改实验是否可见
+
+    PUT /api/v1/experiments/{experiment_id}/visibility
+
+    Body:
+    {
+        "show": true  // 在多实验对比图表中，该实验是否可见
+    }
+
+    Returns:
+        当前实验信息
+    """
+    # 验证API密钥（云端版本，可选验证以保持兼容性）
+    if authorization is not None and not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 验证实验存在
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 更新可见性
+        updated_experiment = experiment_repository.update(
+            experiment,
+            show=1 if show else 0
+        )
+
+        if not updated_experiment:
+            return DATA_ERROR_500("Failed to update experiment visibility")
+
+        return SUCCESS_200({
+            "experiment": experiment_repository.to_dict(updated_experiment)
+        })
+
+    except Exception as e:
+        swanlog.error(f"Change experiment visibility error: {e}")
+        return DATA_ERROR_500(f"Failed to change experiment visibility: {e}")

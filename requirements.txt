@@ -16,3 +16,4 @@ PyMySQL>=1.0.0
 psutil
 setuptools
 requests
+clickhouse_driver

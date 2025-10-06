@@ -7,6 +7,9 @@ r"""
 @Description:
     综合服务 api
 """
+from dotenv import load_dotenv
+import os
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from .middleware.common import (
@@ -19,6 +22,9 @@ from .middleware.common import (
 
 # 响应路径
 from .settings import ASSETS
+
+# 加载 .env 文件
+load_dotenv()
 
 # 服务全局对象 - 配置OpenAPI文档
 app = FastAPI(

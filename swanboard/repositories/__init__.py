@@ -4,6 +4,12 @@
 Repository pattern implementation for SwanLab Dashboard
 Provides unified data access layer for cloud operations
 """
+import logging
+
+# 配置日志记录
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 from ..db.mysql.connection import MySQLConnectionManager as ConnectionManager, mysql_manager as connection_manager
 from .base import BaseRepository
@@ -13,6 +19,7 @@ from .chart import (
     ChartRepository, NamespaceRepository, TagRepository,
     chart_repository, namespace_repository, tag_repository
 )
+from .clickhouse import ClickHouseRepository, clickhouse_repository
 
 __all__ = [
     # Classes
@@ -23,6 +30,7 @@ __all__ = [
     'ChartRepository',
     'NamespaceRepository',
     'TagRepository',
+    'ClickHouseRepository',
 
     # Global instances
     'connection_manager',
@@ -30,5 +38,6 @@ __all__ = [
     'experiment_repository',
     'chart_repository',
     'namespace_repository',
-    'tag_repository'
+    'tag_repository',
+    'clickhouse_repository'
 ]

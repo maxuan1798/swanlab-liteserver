@@ -41,7 +41,7 @@ RUNNING_STATUS = Experiment.RUNNING_STATUS
 
 # ================================== 项目信息获取 ==================================
 
-async def get_project_info(
+def get_project_info(
     project_id: int = DEFAULT_PROJECT_ID,
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
@@ -58,6 +58,7 @@ async def get_project_info(
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
+        print("get_project_info", project_id)
         # 获取项目信息
         project = project_repository.get_by_id(project_id)
         if not project:
@@ -84,12 +85,15 @@ async def get_project_info(
         return SUCCESS_200(project_data)
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         swanlog.error(f"Get project info error: {e}")
+        swanlog.error(f"Full traceback: {error_details}")
         return DATA_ERROR_500(f"Failed to get project info: {e}")
 
 
-async def get_project_summary(
-    project_id: int,
+def get_project_summary(
+    project_id: int = DEFAULT_PROJECT_ID,
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
     """
@@ -153,7 +157,7 @@ async def get_project_summary(
 
 # ================================== 项目信息修改 ==================================
 
-async def update_project_info(
+def update_project_info(
     project_id: int,
     request: Request,
     authorization: Optional[str] = Header(None)
@@ -177,7 +181,7 @@ async def update_project_info(
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
-        body = await request.json()
+        body = request.json()
 
         # 验证项目存在
         project = project_repository.get_by_id(project_id)
@@ -211,7 +215,7 @@ async def update_project_info(
 
 # ================================== 项目删除 ==================================
 
-async def delete_project(
+def delete_project(
     project_id: int,
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
@@ -264,7 +268,7 @@ async def delete_project(
 
 # ================================== 项目图表 ==================================
 
-async def get_project_charts(
+def get_project_charts(
     project_id: int,
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
@@ -368,7 +372,7 @@ async def get_workspace_projects(
 
 # ================================== 创建项目 ==================================
 
-async def create_project(
+def create_project(
     request: Request,
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
@@ -392,7 +396,7 @@ async def create_project(
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
-        body = await request.json()
+        body = request.json()
 
         # 必需字段验证
         required_fields = ['name', 'workspace']

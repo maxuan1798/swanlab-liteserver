@@ -201,20 +201,33 @@ class BaseRepository(Generic[T], ABC):
         Returns:
             Dict: 字典表示
         """
-        if hasattr(instance, 'to_dict'):
-            return instance.to_dict()
+        if not instance:
+            return {}
 
-        # 手动构建字典
-        result = {}
-        for field_name, field in instance._meta.fields.items():
-            value = getattr(instance, field_name, None)
-            if isinstance(value, datetime) and value:
-                result[field_name] = value.isoformat()
-            elif hasattr(value, 'id'):  # 外键
-                result[field_name] = value.id
+        try:
+            if hasattr(instance, 'to_dict') and callable(getattr(instance, 'to_dict')):
+                return instance.to_dict()
+
+            # 手动构建字典
+            result = {}
+            if hasattr(instance, '_meta') and hasattr(instance._meta, 'fields'):
+                for field_name, field in instance._meta.fields.items():
+                    value = getattr(instance, field_name, None)
+                    if isinstance(value, datetime) and value:
+                        result[field_name] = value.isoformat()
+                    elif hasattr(value, 'id'):  # 外键
+                        result[field_name] = value.id
+                    else:
+                        result[field_name] = value
             else:
-                result[field_name] = value
-        return result
+                # 最后的备用方案
+                for attr in dir(instance):
+                    if not attr.startswith('_') and not callable(getattr(instance, attr)):
+                        result[attr] = getattr(instance, attr)
+            return result
+        except Exception as e:
+            swanlog.error(f"Failed to convert instance to dict: {e}")
+            return {}
 
     def json_to_dict(self, json_str: str) -> dict:
         """将JSON字符串转换为字典"""
