@@ -139,6 +139,21 @@ CREATE TABLE IF NOT EXISTS cloud_displays (
     FOREIGN KEY (namespace_id) REFERENCES cloud_namespaces(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 创建云端运行时信息表
+CREATE TABLE IF NOT EXISTS cloud_runtime_info (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    experiment_id INT NOT NULL,
+    requirements TEXT,
+    metadata TEXT,
+    config TEXT,
+    conda TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_experiment (experiment_id),
+    FOREIGN KEY (experiment_id) REFERENCES cloud_experiments(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 插入示例数据（可选）
 INSERT IGNORE INTO cloud_projects (id, name, description, workspace, owner, visibility) VALUES
 (1, 'demo_project', 'Demo project for testing', 'default', 'admin', 'public');

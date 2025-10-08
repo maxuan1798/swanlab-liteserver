@@ -106,6 +106,7 @@ async def sync_project(request: Request, authorization: Optional[str] = Header(N
         return DATA_ERROR_500(f"Project sync failed: {e}")
 
 
+
 # ================================== 实验相关API ==================================
 
 async def sync_experiment(request: Request, authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
@@ -350,6 +351,149 @@ async def update_experiment_status(
     except Exception as e:
         swanlog.error(f"Status update error: {e}")
         return DATA_ERROR_500(f"Status update failed: {e}")
+
+
+# ================================== 运行时信息API ==================================
+
+async def sync_runtime_info(request: Request, authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """
+    同步实验运行时信息到云端数据库
+
+    POST /api/v1/cloud/runtime-info
+
+    Body:
+    {
+        "experiment_id": "1",
+        "requirements": "numpy==1.21.0\npandas==1.3.0",
+        "metadata": "{\"python_version\": \"3.8.10\"}",
+        "config": "epochs: 100\nlearning_rate: 0.001",
+        "conda": "name: myenv\ndependencies:\n  - python=3.8"
+    }
+
+    Returns:
+        运行时信息ID和相关信息
+    """
+    # 验证API密钥
+    if not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        body = await request.json()
+
+        # 必需字段验证
+        required_fields = ['experiment_id']
+        for field in required_fields:
+            if field not in body:
+                return BAD_REQUEST_400(f"Missing required field: {field}")
+
+        experiment_id = int(body['experiment_id'])
+        requirements = body.get('requirements')
+        metadata = body.get('metadata')
+        config = body.get('config')
+        conda = body.get('conda')
+
+        # 验证实验存在
+        from ..repositories import experiment_repository
+        experiment = experiment_repository.get_by_id(experiment_id)
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 获取实验的工作空间信息（通过项目获取）
+        from ..repositories import project_repository
+        project = project_repository.get_by_id(experiment.project_id)
+        if not project:
+            return DATA_ERROR_500("Project not found for experiment")
+
+        # 创建CloudSyncManager实例
+        sync_manager = CloudSyncManager(
+            workspace=project.workspace,
+            user=os.getenv('SWANLAB_USER', 'unknown')
+        )
+
+        # 设置当前实验上下文
+        sync_manager._current_project_id = str(project.id)
+        sync_manager._current_experiment_id = str(experiment.id)
+
+        # 使用CloudSyncManager同步运行时信息
+        runtime_id = sync_manager.sync_runtime_info(
+            requirements=requirements,
+            metadata=metadata,
+            config=config,
+            conda=conda
+        )
+
+        if not runtime_id:
+            return DATA_ERROR_500("Failed to sync runtime info")
+
+        swanlog.info(f"Synced runtime info for experiment {experiment.name}")
+
+        return SUCCESS_200({
+            "id": runtime_id,
+            "runtime_info_id": runtime_id,
+            "experiment_id": str(experiment_id),
+            "synced_fields": {
+                "requirements": requirements is not None,
+                "metadata": metadata is not None,
+                "config": config is not None,
+                "conda": conda is not None
+            }
+        })
+
+    except Exception as e:
+        swanlog.error(f"Runtime info sync error: {e}")
+        return DATA_ERROR_500(f"Runtime info sync failed: {e}")
+
+
+async def get_runtime_info(
+    experiment_id: str,
+    authorization: Optional[str] = Header(None)
+) -> Dict[str, Any]:
+    """
+    获取实验运行时信息
+
+    GET /api/v1/cloud/experiments/{experiment_id}/runtime-info
+
+    Returns:
+        运行时信息详情
+    """
+    # 验证API密钥
+    if not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 验证实验存在
+        from ..repositories import experiment_repository
+        experiment = experiment_repository.get_by_id(int(experiment_id))
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
+
+        # 获取实验的工作空间信息
+        from ..repositories import project_repository
+        project = project_repository.get_by_id(experiment.project_id)
+        if not project:
+            return DATA_ERROR_500("Project not found for experiment")
+
+        # 创建CloudSyncManager实例
+        sync_manager = CloudSyncManager(
+            workspace=project.workspace,
+            user=os.getenv('SWANLAB_USER', 'unknown')
+        )
+
+        # 获取运行时信息
+        runtime_info = sync_manager.get_experiment_runtime_info(int(experiment_id))
+
+        if not runtime_info:
+            return NOT_FOUND_404(f"Runtime info not found for experiment {experiment_id}")
+
+        return SUCCESS_200({
+            "experiment_id": str(experiment_id),
+            "experiment_name": experiment.name,
+            "runtime_info": runtime_info
+        })
+
+    except Exception as e:
+        swanlog.error(f"Get runtime info error: {e}")
+        return DATA_ERROR_500(f"Failed to get runtime info: {e}")
 
 
 # ================================== 查询API ==================================

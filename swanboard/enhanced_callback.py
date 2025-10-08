@@ -18,13 +18,9 @@ import requests
 from typing import Tuple, Optional, Dict, Any
 from datetime import datetime
 
-from swankit.callback import SwanKitCallback
-from swankit.callback.models import ColumnInfo
-from .db.models import *
-from .db import add_multi_chart, connect, NotExistedError, ExistedError, ChartTypeError
+from swankit.callback.models import ColumnInfo, RuntimeInfo
 from .callback import SwanBoardCallback
-from .utils import swanlog, get_swanlog_dir
-
+from .utils import swanlog
 
 class EnhancedSwanBoardCallback(SwanBoardCallback):
     """
@@ -65,6 +61,25 @@ class EnhancedSwanBoardCallback(SwanBoardCallback):
                 })
 
             swanlog.info(f"HTTP cloud sync enabled - API: {self.cloud_api_base}, Workspace: {self.cloud_workspace}")
+
+    # def on_runtime_info_update(self, r: RuntimeInfo):
+        """
+        运行时信息更新时调用
+        :param r: RuntimeInfo, 运行时信息
+        """
+        # runtime = Runtime.from_runtime_info(data)
+        # # 写入运行时信息到数据存储
+        # file_dir = self._run_store.file_dir
+        # if data.requirements is not None:
+        #     print(f"Writing requirements.txt: {data.requirements.dump}")
+        #     data.requirements.write(file_dir)
+        # if data.metadata is not None:
+        #     data.metadata.write(file_dir)
+        # if data.config is not None:
+        #     data.config.write(file_dir)
+        # if data.conda is not None:
+        #     data.conda.write(file_dir)
+        # self._publish((UploadType.FILE, [runtime.to_file_model(file_dir)]))
 
     def _send_cloud_request(self, endpoint: str, data: Dict[str, Any], method: str = 'POST') -> Optional[Dict]:
         """
@@ -293,6 +308,59 @@ class EnhancedSwanBoardCallback(SwanBoardCallback):
                 self.cloud_experiment_id = cloud_experiment_id
             else:
                 swanlog.warning(f"Failed to sync experiment {exp_name} to cloud HTTP API")
+
+    def on_runtime_info_update(self, r: RuntimeInfo, *args, **kwargs):
+        """
+        运行时信息更新时调用
+        :param r: RuntimeInfo, 运行时信息
+        """
+        # 执行原有的本地逻辑
+        super().on_runtime_info_update(r, *args, **kwargs)
+
+        # 如果启用云端同步，将运行时信息同步到云端
+        if self.enable_cloud and hasattr(self, 'cloud_experiment_id'):
+            self._sync_runtime_info_to_cloud(r)
+
+    def _sync_runtime_info_to_cloud(self, runtime_info: RuntimeInfo):
+        """
+        同步运行时信息到云端
+
+        :param runtime_info: RuntimeInfo 运行时信息对象
+        """
+        try:
+            data = {
+                'experiment_id': self.cloud_experiment_id
+            }
+
+            # 提取运行时信息内容
+            if runtime_info.requirements is not None:
+                data['requirements'] = runtime_info.requirements.dumps()
+
+            if runtime_info.metadata is not None:
+                data['metadata'] = runtime_info.metadata.dumps()
+
+            if runtime_info.config is not None:
+                data['config'] = runtime_info.config.dumps()
+
+            if runtime_info.conda is not None:
+                data['conda'] = runtime_info.conda.dumps()
+
+            # 发送到云端API
+            response = self._send_cloud_request('runtime-info', data)
+            if response:
+                runtime_id = response.get('id') or response.get('runtime_info_id')
+                if runtime_id:
+                    swanlog.debug(f"Runtime info synced to cloud with ID: {runtime_id}")
+                    return str(runtime_id)
+                else:
+                    swanlog.warning("Runtime info sync response missing ID")
+            else:
+                swanlog.warning("Failed to sync runtime info to cloud")
+
+        except Exception as e:
+            swanlog.error(f"Error syncing runtime info to cloud: {e}")
+
+        return None
 
     def on_column_create(self, column_info: ColumnInfo, *args, **kwargs):
         # 执行原有的本地逻辑

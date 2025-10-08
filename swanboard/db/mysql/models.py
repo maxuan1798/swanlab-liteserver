@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 MySQL云端数据库模型定义
-与本地SQLite模型保持结构一致，但适配MySQL数据库
+与��地SQLite模型保持结构一致，但适配MySQL数据库
 """
 
 from peewee import (
@@ -28,7 +28,7 @@ cloud_db = DatabaseProxy()
 
 
 class CloudBaseModel(Model):
-    """云端数据库基础模型类"""
+    """云端数据库基础模型���"""
 
     class Meta:
         database = cloud_db
@@ -266,6 +266,29 @@ class CloudDisplay(CloudBaseModel):
         return super().save(*args, **kwargs)
 
 
+class CloudRuntimeInfo(CloudBaseModel):
+    """云端运行时信息表"""
+
+    id = IntegerField(primary_key=True)
+    experiment = ForeignKeyField(CloudExperiment, backref='runtime_info', on_delete='CASCADE')
+
+    # 运行时信息字段
+    requirements = TextField(null=True)  # requirements.txt内容
+    metadata = TextField(null=True)      # metadata JSON内容
+    config = TextField(null=True)        # config YAML内容
+    conda = TextField(null=True)         # conda environment YAML内容
+
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'cloud_runtime_info'
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+
 # 所有云端模型的列表，用于批量操作
 CLOUD_MODELS = [
     CloudProject,
@@ -274,5 +297,6 @@ CLOUD_MODELS = [
     CloudChart,
     CloudTag,
     CloudSource,
-    CloudDisplay
+    CloudDisplay,
+    CloudRuntimeInfo
 ]

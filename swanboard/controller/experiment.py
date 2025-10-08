@@ -10,6 +10,8 @@
 """
 
 import os
+import ujson
+import yaml
 from typing import Dict, Any, Optional, List
 from fastapi import Request, HTTPException, Header
 
@@ -23,6 +25,7 @@ from ..db.mysql import (
     CloudProject as Project,
     CloudExperiment as Experiment
 )
+from ..db.mysql.models import CloudRuntimeInfo
 
 # 响应模块
 from ..module.resp import (
@@ -99,7 +102,7 @@ def get_experiment_info(
     GET /api/v1/experiments/{experiment_id}
 
     Returns:
-        实验信息和相关数据
+        ���验信息和相关数据
     """
     # 验证API密钥（云端版本，可选验证以保持兼容性）
     if authorization is not None and not connection_manager.validate_api_key(authorization):
@@ -121,9 +124,46 @@ def get_experiment_info(
         # 移除不需要的字段
         experiment_data.pop("project_id", None)
 
-        # 云端版本不需要本地配置文件，相关配置存储在数据库中
-        experiment_data["config"] = {}
-        experiment_data["system"] = {}
+        # 从云端运行时信息获取 config 和 system
+        try:
+            # 从 CloudRuntimeInfo 表中获取运行时信息
+            runtime_info = CloudRuntimeInfo.select().where(
+                CloudRuntimeInfo.experiment == experiment_id
+            ).first()
+
+            if runtime_info:
+                # 从云端运行时信息加载 config
+                if runtime_info.config:
+                    try:
+                        experiment_data["config"] = yaml.load(runtime_info.config, Loader=yaml.FullLoader)
+                    except Exception as e:
+                        swanlog.warning(f"Failed to parse config from cloud runtime info: {e}")
+                        experiment_data["config"] = {}
+                else:
+                    experiment_data["config"] = {}
+
+                # 从云端运行时信息加载 system (metadata)
+                if runtime_info.metadata:
+                    try:
+                        experiment_data["system"] = ujson.loads(runtime_info.metadata)
+                    except Exception as e:
+                        swanlog.warning(f"Failed to parse metadata from cloud runtime info: {e}")
+                        experiment_data["system"] = {}
+                else:
+                    experiment_data["system"] = {}
+
+                swanlog.debug(f"Loaded config and system from cloud runtime info for experiment {experiment_id}")
+            else:
+                # 如果云端没有运行时信息，设置为空
+                experiment_data["config"] = {}
+                experiment_data["system"] = {}
+                swanlog.info(f"No runtime info found in cloud for experiment {experiment_id}")
+
+        except Exception as e:
+            swanlog.warning(f"Failed to get runtime info from cloud: {e}")
+            # 云端获取失败时，设置为空
+            experiment_data["config"] = {}
+            experiment_data["system"] = {}
 
         return SUCCESS_200(experiment_data)
 
@@ -178,7 +218,7 @@ def get_tag_data(
         # 获取指标数据
         tag_data = clickhouse_repository.get_metric_data(run_id, column_id)
 
-        # 如果数据为空，返回空列表
+        # 如果数据为空，返回空列���
         if len(tag_data) == 0:
             return SUCCESS_200(data={
                 "sum": 0,
@@ -224,7 +264,7 @@ def get_experiment_status(
     authorization: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    获取实验状态以及实验图表配置，用于实时更新实验状态
+    获取实验状态以及实验图表配���，用于实时更新实验状态
 
     GET /api/v1/experiments/{experiment_id}/status
 
@@ -287,7 +327,7 @@ def get_experiment_summary(
         # 构建总结数据
         summaries = []
         for chart in charts:
-            # 云端版本中，总结数据从数据库中获取
+            # 云端版本中，总结数据从数据���中获取
             summaries.append({
                 "key": chart["key"],
                 "value": f"Latest value for {chart['key']}"  # 这里可以扩展为实际的最新值
@@ -305,7 +345,7 @@ def get_experiment_charts(
     authorization: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    获取实验图表信息
+    获���实验图表信息
 
     GET /api/v1/experiments/{experiment_id}/charts
 
@@ -390,7 +430,7 @@ def get_experiment_requirements(
     authorization: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    获取实验依赖（从 ClickHouse 获取）
+    获取实验依赖（优先从云端运行时信息获取）
 
     GET /api/v1/experiments/{experiment_id}/requirements
 
@@ -407,44 +447,68 @@ def get_experiment_requirements(
         if not experiment:
             return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
 
-        # 获取 run_id
-        run_id = getattr(experiment, 'run_dir', None) or getattr(experiment, 'run_id', None)
-        if not run_id:
-            swanlog.warning(f"Experiment {experiment_id} has no run_id, using experiment_id as fallback")
-            run_id = str(experiment_id)
+        # 从云端运行时信息获取数据
+        try:
+            runtime_info = CloudRuntimeInfo.select().where(
+                CloudRuntimeInfo.experiment == experiment_id
+            ).first()
 
-        # 从 ClickHouse 获取运行时信息
-        runtime_info = clickhouse_repository.get_runtime_info(run_id)
+            if runtime_info:
+                # 解析 requirements 文件内容
+                requirements_content = runtime_info.requirements or ''
+                if requirements_content:
+                    # 如果是文件内容，按行分割
+                    if '\n' in requirements_content:
+                        requirements_lines = requirements_content.strip().split('\n')
+                    else:
+                        # 单行内容
+                        requirements_lines = [requirements_content]
+                else:
+                    requirements_lines = ["# No requirements information available"]
 
-        if not runtime_info:
+                # 解析 metadata 获取系统信息
+                system_info = {}
+                if runtime_info.metadata:
+                    try:
+                        system_info = ujson.loads(runtime_info.metadata)
+                    except Exception as e:
+                        swanlog.warning(f"Failed to parse metadata: {e}")
+
+                # 解析 conda 环境信息
+                conda_content = runtime_info.conda or ''
+
+                return SUCCESS_200({
+                    "requirements": requirements_lines,
+                    "python_version": system_info.get('python_version'),
+                    "platform": system_info.get('platform'),
+                    "cuda_version": system_info.get('cuda_version'),
+                    "conda": conda_content,
+                    "metadata": runtime_info.metadata,
+                    "config": runtime_info.config
+                })
+            else:
+                swanlog.info(f"No cloud runtime info found for experiment {experiment_id}")
+                return SUCCESS_200({
+                    "requirements": ["# No requirements information available"],
+                    "python_version": None,
+                    "platform": None,
+                    "cuda_version": None,
+                    "conda": "",
+                    "metadata": None,
+                    "config": None
+                })
+
+        except Exception as e:
+            swanlog.warning(f"Failed to get runtime info from cloud database: {e}")
             return SUCCESS_200({
-                "requirements": ["# No requirements information available"],
+                "requirements": ["# Error loading requirements information"],
                 "python_version": None,
                 "platform": None,
-                "cuda_version": None
+                "cuda_version": None,
+                "conda": "",
+                "metadata": None,
+                "config": None
             })
-
-        # 解析 requirements 文件内容
-        requirements_content = runtime_info.get('requirements', '')
-        if requirements_content:
-            # 如果是文件名，返回提示；如果是内容，按行分割
-            if '\n' in requirements_content:
-                requirements_lines = requirements_content.split('\n')
-            else:
-                # 可能是文件名，返回提示
-                requirements_lines = [f"# Requirements file: {requirements_content}"]
-        else:
-            requirements_lines = ["# No requirements information available"]
-
-        return SUCCESS_200({
-            "requirements": requirements_lines,
-            "python_version": runtime_info.get('python_version'),
-            "platform": runtime_info.get('platform'),
-            "cuda_version": runtime_info.get('cuda_version'),
-            "conda": runtime_info.get('conda'),
-            "metadata": runtime_info.get('metadata'),
-            "config": runtime_info.get('config')
-        })
 
     except Exception as e:
         import traceback
@@ -611,7 +675,7 @@ def delete_experiment(
         if not experiment:
             return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
 
-        # 检查实验是否正在运行
+        # ���查实验是否正在运行
         if experiment.status == RUNNING_STATUS:
             return CONFLICT_409("Can't delete experiment since it is running")
 

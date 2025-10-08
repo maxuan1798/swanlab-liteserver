@@ -18,6 +18,8 @@ from ..controller.cloud import (
     sync_experiment,
     sync_column,
     update_experiment_status,
+    sync_runtime_info,
+    get_runtime_info,
     get_workspace_projects,
     get_project_experiments,
     get_workspaces
@@ -91,6 +93,21 @@ class ErrorResponse(BaseModel):
     success: bool = Field(False, description="是否成功")
     error: str = Field(..., description="错误信息")
     code: Optional[int] = Field(None, description="错误代码")
+
+class RuntimeInfoSyncRequest(BaseModel):
+    """运行时信息同步请求模型"""
+    experiment_id: str = Field(..., description="实验ID", example="1")
+    requirements: Optional[str] = Field(None, description="requirements.txt内容", example="numpy==1.21.0\npandas==1.3.0")
+    metadata: Optional[str] = Field(None, description="metadata JSON内容", example='{"python_version": "3.8.10"}')
+    config: Optional[str] = Field(None, description="config YAML内容", example="epochs: 100\nlearning_rate: 0.001")
+    conda: Optional[str] = Field(None, description="conda environment YAML内容", example="name: myenv\ndependencies:\n  - python=3.8")
+
+class RuntimeInfoSyncResponse(BaseModel):
+    """运行时信息同步响应模型"""
+    success: bool = Field(..., description="是否成功")
+    runtime_info_id: str = Field(..., description="运行时信息ID", example="1")
+    experiment_id: str = Field(..., description="实验ID", example="1")
+    synced_fields: Dict[str, bool] = Field(..., description="已同步的字段")
 
 router = APIRouter(
     tags=["Cloud API"],
@@ -213,6 +230,81 @@ async def update_experiment_status_route(
     需要在Authorization header中提供有效的API密钥
     """
     return await update_experiment_status(experiment_id, request, authorization)
+
+
+# ================================== 运行时信息相关路由 ==================================
+
+@router.post(
+    "/runtime-info",
+    response_model=RuntimeInfoSyncResponse,
+    summary="同步运行时信息到云端",
+    description="同步机器学习实验的运行时信息到云端存储，包括requirements、metadata、config和conda环境",
+    responses={
+        200: {"model": RuntimeInfoSyncResponse, "description": "运行时信息同步成功"},
+        400: {"model": ErrorResponse, "description": "请求参数错误"},
+        404: {"model": ErrorResponse, "description": "实验不存在"},
+    }
+)
+async def sync_runtime_info_route(
+    runtime_data: RuntimeInfoSyncRequest,
+    request: Request,
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
+):
+    """
+    ## 同步运行时信息到云端
+
+    此端点允许EnhancedSwanBoardCallback将实验运行时信息同步到云端存储。
+
+    ### 功能特性
+    - 同步requirements.txt内容
+    - 同步metadata JSON信息
+    - 同步config YAML配置
+    - 同步conda环境配置
+
+    ### 使用场景
+    - 训练开始时记录环境信息
+    - 更新实验配置文件
+    - 保存依赖包版本信息
+
+    ### 认证
+    需要在Authorization header中提供有效的API密钥
+    """
+    return await sync_runtime_info(request, authorization)
+
+
+@router.get(
+    "/experiments/{experiment_id}/runtime-info",
+    summary="获取实验运行时信息",
+    description="获取指定实验的运行时信息，包括requirements、metadata、config和conda环境",
+    responses={
+        200: {"description": "运行时信息获取成功"},
+        404: {"model": ErrorResponse, "description": "实验或运行时信息不存在"},
+    }
+)
+async def get_runtime_info_route(
+    experiment_id: str,
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
+):
+    """
+    ## 获取实验运行时信息
+
+    此端点允许获取指定实验的完整运行时信息。
+
+    ### 返回信息
+    - requirements.txt内容
+    - metadata JSON信息
+    - config YAML配置
+    - conda环境配置
+
+    ### 使用场景
+    - 查看实验环境配置
+    - 复现实验环境
+    - 分析依赖包版本
+
+    ### 认证
+    需要在Authorization header中提供有效的API密钥
+    """
+    return await get_runtime_info(experiment_id, authorization)
 
 
 # ================================== 列/指标相关路由 ==================================
@@ -390,6 +482,10 @@ async def api_info():
                 "PUT /experiments/{id}/status": "Update experiment status",
                 "GET /projects/{id}/experiments": "List project experiments"
             },
+            "runtime_info": {
+                "POST /runtime-info": "Sync runtime info to cloud",
+                "GET /experiments/{id}/runtime-info": "Get experiment runtime info"
+            },
             "columns": {
                 "POST /columns": "Sync column/metric to cloud"
             },
@@ -405,3 +501,4 @@ async def api_info():
             "env_var": "SWANLAB_API_KEY"
         }
     }
+

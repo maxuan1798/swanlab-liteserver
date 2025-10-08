@@ -12,6 +12,7 @@ from swankit.callback.models import ColumnInfo
 from ..repositories import (
     connection_manager, project_repository, experiment_repository, chart_repository
 )
+from ..db.mysql.models import CloudRuntimeInfo
 from swanboard.utils import swanlog
 
 
@@ -112,6 +113,63 @@ class CloudSyncManager:
 
             except Exception as e:
                 swanlog.error(f"Failed to sync experiment '{name}' to cloud: {e}")
+                return None
+
+    def sync_runtime_info(self, requirements: str = None, metadata: str = None,
+                         config: str = None, conda: str = None) -> Optional[str]:
+        """
+        同步实验运行时信息到云端
+
+        Args:
+            requirements: requirements.txt内容
+            metadata: metadata JSON内容
+            config: config YAML内容
+            conda: conda environment YAML内容
+
+        Returns:
+            str: 云端运行时信息ID，失败返回None
+        """
+        if not connection_manager.ensure_connected() or not self._current_experiment_id:
+            swanlog.warning("Cloud database not connected or no experiment, skipping runtime info sync")
+            return None
+
+        with self._lock:
+            try:
+                # 检查是否已存在运行时信息
+                existing = CloudRuntimeInfo.select().where(
+                    CloudRuntimeInfo.experiment == int(self._current_experiment_id)
+                ).first()
+
+                if existing:
+                    # 更新现有记录
+                    if requirements is not None:
+                        existing.requirements = requirements
+                    if metadata is not None:
+                        existing.metadata = metadata
+                    if config is not None:
+                        existing.config = config
+                    if conda is not None:
+                        existing.conda = conda
+
+                    existing.save()
+                    runtime_id = str(existing.id)
+                    swanlog.debug(f"Runtime info updated for experiment ID: {self._current_experiment_id}")
+                else:
+                    # 创建新记录
+                    runtime_info = CloudRuntimeInfo.create(
+                        experiment=int(self._current_experiment_id),
+                        requirements=requirements,
+                        metadata=metadata,
+                        config=config,
+                        conda=conda
+                    )
+                    runtime_id = str(runtime_info.id)
+                    swanlog.debug(f"Runtime info created for experiment ID: {self._current_experiment_id}")
+
+                return runtime_id
+
+            except Exception as e:
+                swanlog.error(f"Failed to sync runtime info to cloud: {e}")
                 return None
 
     def sync_column(self, column_info: ColumnInfo) -> Optional[str]:
@@ -239,6 +297,38 @@ class CloudSyncManager:
 
         except Exception as e:
             swanlog.error(f"Failed to get experiment details: {e}")
+            return None
+
+    def get_experiment_runtime_info(self, experiment_id: int = None) -> Optional[Dict[str, Any]]:
+        """
+        获取实验运行时信息
+
+        Args:
+            experiment_id: 实验ID，如果不提供则使用当前实验
+
+        Returns:
+            Dict: 运行时信息，失败返回None
+        """
+        if not connection_manager.ensure_connected():
+            return None
+
+        exp_id = experiment_id or (int(self._current_experiment_id) if self._current_experiment_id else None)
+        if not exp_id:
+            swanlog.warning("No experiment ID provided for runtime info query")
+            return None
+
+        try:
+            runtime_info = CloudRuntimeInfo.select().where(
+                CloudRuntimeInfo.experiment == exp_id
+            ).first()
+
+            if runtime_info:
+                return runtime_info.to_dict()
+            else:
+                return None
+
+        except Exception as e:
+            swanlog.error(f"Failed to get runtime info: {e}")
             return None
 
     def cleanup(self):
