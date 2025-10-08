@@ -68,15 +68,13 @@ CREATE TABLE IF NOT EXISTS cloud_experiments (
 -- 创建云端命名空间表
 CREATE TABLE IF NOT EXISTS cloud_namespaces (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    experiment_id INT NOT NULL,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) UNIQUE NOT NULL,
     sort_order INT,
+    opened BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    INDEX idx_experiment (experiment_id),
-    UNIQUE KEY unique_experiment_name (experiment_id, name),
-    FOREIGN KEY (experiment_id) REFERENCES cloud_experiments(id) ON DELETE CASCADE
+    INDEX idx_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 创建云端图表表

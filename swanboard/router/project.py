@@ -19,7 +19,7 @@ router = APIRouter()
 
 
 @router.get("")
-def _():
+def _(project_id: int = DEFAULT_PROJECT_ID):
     """获取项目下的实验列表
 
     Returns
@@ -28,7 +28,7 @@ def _():
         项目下的实验列表
     """
 
-    return get_project_info()
+    return get_project_info(project_id)
 
 
 @router.get("/summaries")

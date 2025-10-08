@@ -69,7 +69,6 @@ class ChartRepository(BaseRepository[CloudChart]):
 
             # 创建或获取命名空间
             namespace, _ = CloudNamespace.get_or_create(
-                experiment=experiment,
                 name=section_name,
                 defaults={'sort_order': section_sort}
             )
@@ -201,33 +200,154 @@ class ChartRepository(BaseRepository[CloudChart]):
 
 
 class NamespaceRepository(BaseRepository[CloudNamespace]):
-    """命名空间仓库类"""
+    """命名空间仓库类 (workspace)"""
 
     def __init__(self):
         super().__init__(CloudNamespace)
 
-    def get_experiment_namespaces(self, experiment_id: int) -> List[Dict[str, Any]]:
+    def get_all(self, page: int = 1, size: int = 20, keyword: Optional[str] = None) -> tuple[List[Dict[str, Any]], int]:
         """
-        获取实验的所有命名空间
+        分页查询所有命名空间
 
         Args:
-            experiment_id: 实验ID
+            page: 页码，从1开始
+            size: 每页大小
+            keyword: 搜索关键词
 
         Returns:
-            List[Dict]: 命名空间列表
+            tuple: (命名空间列表, 总数)
+        """
+        if not self.ensure_connection():
+            return [], 0
+
+        try:
+            query = CloudNamespace.select()
+
+            # 添加关键词搜索
+            if keyword:
+                query = query.where(CloudNamespace.name.contains(keyword))
+
+            # 计算总数
+            total = query.count()
+
+            # 分页查询
+            offset = (page - 1) * size
+            namespaces = query.order_by(CloudNamespace.sort_order).offset(offset).limit(size)
+
+            namespace_list = [self.to_dict(ns) for ns in namespaces]
+            return namespace_list, total
+
+        except Exception as e:
+            swanlog.error(f"Failed to get all namespaces: {e}")
+            return [], 0
+
+    def get_by_name(self, name: str) -> Optional[CloudNamespace]:
+        """
+        根据名称获取命名空间
+
+        Args:
+            name: 命名空间名称
+
+        Returns:
+            CloudNamespace: 命名空间实例，不存在返回None
+        """
+        if not self.ensure_connection():
+            return None
+
+        try:
+            return CloudNamespace.get(CloudNamespace.name == name)
+        except CloudNamespace.DoesNotExist:
+            return None
+        except Exception as e:
+            swanlog.error(f"Failed to get namespace by name '{name}': {e}")
+            return None
+
+    def create_namespace(self, name: str, sort_order: Optional[int] = None) -> Optional[CloudNamespace]:
+        """
+        创建新的命名空间
+
+        Args:
+            name: 命名空间名称
+            sort_order: 排序顺序，如果不提供则自动设置为最大值+1
+
+        Returns:
+            CloudNamespace: 创建的命名空间实例，失败返回None
+        """
+        if not self.ensure_connection():
+            return None
+
+        try:
+            # 检查是否已存在同名命名空间
+            existing = self.get_by_name(name)
+            if existing:
+                swanlog.warning(f"Namespace with name '{name}' already exists")
+                return None
+
+            # 如果没有提供sort_order，则设置为最大值+1
+            if sort_order is None:
+                max_order = CloudNamespace.select().aggregate(CloudNamespace.sort_order.max())
+                sort_order = (max_order or 0) + 1
+
+            # 创建命名空间
+            namespace = self.create(name=name, sort_order=sort_order)
+            if namespace:
+                swanlog.info(f"Created namespace: {name} with sort_order: {sort_order}")
+            return namespace
+
+        except Exception as e:
+            swanlog.error(f"Failed to create namespace '{name}': {e}")
+            return None
+
+    def update_opened(self, namespace_id: int, opened: bool) -> bool:
+        """
+        更新命名空间的开启/关闭状态
+
+        Args:
+            namespace_id: 命名空间ID
+            opened: 是否开启
+
+        Returns:
+            bool: 更新成功返回True
+        """
+        namespace = self.get_by_id(namespace_id)
+        if not namespace:
+            swanlog.error(f"Namespace with id {namespace_id} not found")
+            return False
+
+        try:
+            return self.update(namespace, opened=opened) is not None
+        except Exception as e:
+            swanlog.error(f"Failed to update namespace opened status: {e}")
+            return False
+
+    def get_all_workspaces(self) -> List[Dict[str, Any]]:
+        """
+        获取所有工作空间（命名空间）列表
+
+        Returns:
+            List[Dict]: 工作空间列表，每个包含 name 和 project_count
         """
         if not self.ensure_connection():
             return []
 
         try:
-            namespaces = CloudNamespace.select().where(
-                CloudNamespace.experiment == experiment_id
-            ).order_by(CloudNamespace.sort_order)
+            # 获取所有命名空间
+            namespaces = CloudNamespace.select().order_by(CloudNamespace.sort_order)
 
-            return [self.to_dict(ns) for ns in namespaces]
+            workspace_list = []
+            for ns in namespaces:
+                workspace_list.append({
+                    'name': ns.name,
+                    'id': ns.id,
+                    'sort_order': ns.sort_order,
+                    'opened': ns.opened,
+                    'created_at': ns.created_at.isoformat() if ns.created_at else None
+                })
+
+            return workspace_list
 
         except Exception as e:
-            swanlog.error(f"Failed to get experiment namespaces: {e}")
+            swanlog.error(f"Failed to get all workspaces: {e}")
             return []
 
 

@@ -6,6 +6,70 @@ from .db import (
     Experiment,
     Project,
 )
+from ..repositories import namespace_repository
+
+
+def get_namespaces(page: int = 1, size: int = 20, keyword: str = None):
+    """分页查询namespace列表
+
+    Parameters
+    ----------
+    page : int, optional
+        页码，从1开始，默认为1
+    size : int, optional
+        每页大小，默认为20
+    keyword : str, optional
+        搜索关键词，用于模糊匹配namespace名称
+
+    Returns
+    -------
+    dict
+        包含namespace列表和分页信息的响应
+    """
+    try:
+        # 使用 repository 获取数据
+        namespace_list, total = namespace_repository.get_all(page=page, size=size, keyword=keyword)
+
+        return SUCCESS_200({
+            "namespaces": namespace_list,
+            "pagination": {
+                "page": page,
+                "size": size,
+                "total": total,
+                "pages": (total + size - 1) // size if total > 0 else 0
+            }
+        })
+
+    except Exception as e:
+        return PARAMS_ERROR_422(str(e))
+
+
+def create_namespace(name: str, sort_order: int = None):
+    """创建新的namespace
+
+    Parameters
+    ----------
+    name : str
+        namespace名称
+    sort_order : int, optional
+        排序顺序，如果不提供则自动设置为最大值+1
+
+    Returns
+    -------
+    dict
+        创建的namespace信息
+    """
+    try:
+        # 使用 repository 创建命名空间
+        namespace = namespace_repository.create_namespace(name=name, sort_order=sort_order)
+
+        if not namespace:
+            return PARAMS_ERROR_422("Namespace with name '{}' already exists.".format(name))
+
+        return SUCCESS_200(namespace_repository.to_dict(namespace))
+
+    except Exception as e:
+        return PARAMS_ERROR_422(str(e))
 
 
 # 修改namespace可见性

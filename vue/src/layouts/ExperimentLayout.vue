@@ -54,17 +54,21 @@
 import ConfigEditor from '@swanlab-vue/business/config-editor/ConfigEditor.vue'
 import DeleteButton from '@swanlab-vue/business/config-editor/DeleteButton.vue'
 import http from '@swanlab-vue/api/http'
-import { useProjectStore, useExperimentStore } from '@swanlab-vue/store'
+import { useProjectStore, useExperimentStore, useWorkspaceStore } from '@swanlab-vue/store'
 import { useRouter } from 'vue-router'
 import { message } from '@swanlab-vue/components/message'
 import { t } from '@swanlab-vue/i18n'
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
 const experimentStore = useExperimentStore()
+const workspaceStore = useWorkspaceStore()
 const experiment = ref(experimentStore.experiment)
+
+// 获取当前项目ID
+const currentProjectId = computed(() => workspaceStore.currentProjectId || projectStore.id)
 
 // ---------------------------------- 删除实验 ----------------------------------
 const deleteExperiment = () => {
@@ -72,7 +76,7 @@ const deleteExperiment = () => {
     .delete(`/experiment/${experimentStore.id}`)
     .then(({ data }) => {
       projectStore.deleteExperiment(data.experiment_id)
-      router.replace('/').then(() => {
+      router.replace(`/project/${currentProjectId.value}`).then(() => {
         message.success(t('common.delete.success'))
       })
     })
@@ -98,22 +102,22 @@ const modifyExperiment = async (newV, hideModal) => {
 const navs = computed(() => [
   {
     label: t('experiment.navs.index'),
-    to: `/experiment/${experimentStore.id}/index`,
+    to: `/project/${currentProjectId.value}/experiment/${experimentStore.id}/index`,
     icon: 'experiment'
   },
   {
     label: t('experiment.navs.chart'),
-    to: `/experiment/${experimentStore.id}/chart`,
+    to: `/project/${currentProjectId.value}/experiment/${experimentStore.id}/chart`,
     icon: 'chart'
   },
   {
     label: t('experiment.navs.log'),
-    to: `/experiment/${experimentStore.id}/log`,
+    to: `/project/${currentProjectId.value}/experiment/${experimentStore.id}/log`,
     icon: 'logs'
   },
   {
     label: t('experiment.navs.env'),
-    to: `/experiment/${experimentStore.id}/env`,
+    to: `/project/${currentProjectId.value}/experiment/${experimentStore.id}/env`,
     icon: 'info'
   }
 ])

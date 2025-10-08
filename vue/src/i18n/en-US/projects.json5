@@ -1,0 +1,11 @@
+{
+  title: 'Projects',
+  description: 'Select a project to view experiments and charts',
+  card: {
+    experiments: 'experiments',
+  },
+  empty: {
+    title: 'No Projects',
+    description: 'Create a new project to get started',
+  },
+}

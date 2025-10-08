@@ -1,15 +1,14 @@
 <template>
   <!-- 侧边栏区域 -->
   <div class="flex flex-col grow h-full bg-higher">
-    <!-- 概览区域 -->
-    <div class="p-4 flex flex-col border-b gap-2 font-semibold">
-      <!-- 项目信息 -->
-      <h1 class="font-semibold mb-1">{{ $t('common.sidebar.project.title') }}</h1>
-      <RouterLink to="/" active-class="active-link">
+    <!-- 当前项目导航 -->
+    <div class="p-4 flex flex-col border-b gap-2 font-semibold" v-if="workspaceStore.currentProject">
+      <h1 class="font-semibold mb-1">{{ projectStore.name }}</h1>
+      <RouterLink :to="`/project/${workspaceStore.currentProjectId}`" active-class="active-link">
         <SLIcon icon="runs" class="w-4 h-4 mr-2" />
         <span>{{ $t('common.sidebar.project.runs') }}</span>
       </RouterLink>
-      <RouterLink to="/charts" active-class="active-link">
+      <RouterLink :to="`/project/${workspaceStore.currentProjectId}/charts`" active-class="active-link">
         <SLIcon icon="charts" class="w-4 h-4 mr-2" />
         <span>{{ $t('common.sidebar.project.charts') }}</span>
       </RouterLink>
@@ -42,7 +41,7 @@
           <!-- 如果实验正在运行，显示running -->
           <span v-if="experiment.status === 0"> ({{ $t('common.sidebar.experiments.running') }}) </span>
           <!-- 如果在charts页面，显示眼睛 -->
-          <button class="show-button" v-if="$route.path == '/charts'" @click="changeExperimentShow(experiment.id)">
+          <button class="show-button" v-if="route.name === 'charts'" @click="changeExperimentShow(experiment.id)">
             <SLIcon icon="eye" class="w-full h-full" v-if="experiment.show" />
             <SLIcon icon="eye-close" class="w-full h-full text-dimmest" v-else />
           </button>
@@ -61,15 +60,19 @@
 import SLIcon from '@swanlab-vue/components/SLIcon.vue'
 import SLSearch from '@swanlab-vue/components/SLSearch.vue'
 import { ref, computed } from 'vue'
-import { RouterLink } from 'vue-router'
-import { useProjectStore } from '@swanlab-vue/store'
+import { RouterLink, useRouter, useRoute } from 'vue-router'
+import { useProjectStore, useWorkspaceStore } from '@swanlab-vue/store'
 import http from '@swanlab-vue/api/http'
 import { debounces } from '@swanlab-vue/utils/common'
 
+const router = useRouter()
+const route = useRoute()
 const projectStore = useProjectStore()
+const workspaceStore = useWorkspaceStore()
 // ---------------------------------- 实验id转路由 ----------------------------------
 const getExperimentRouter = (experiment) => {
-  return `/experiment/${experiment.id}`
+  const projectId = workspaceStore.currentProjectId || projectStore.id
+  return `/project/${projectId}/experiment/${experiment.id}`
 }
 
 // ---------------------------------- 搜索实验 ----------------------------------
@@ -94,7 +97,7 @@ const getExperimentColor = (experiment) => {
 // ---------------------------------- 计算实验数量，也包括可视实验数量 ----------------------------------
 
 const totalExperiments = computed(() => {
-  return projectStore.experiments.length
+  return projectStore.experiments?.length || 0
 })
 
 // ---------------------------------- 项目图表界面下，点击眼睛后的效果 ----------------------------------

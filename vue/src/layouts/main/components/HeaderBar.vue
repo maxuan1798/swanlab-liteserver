@@ -1,7 +1,7 @@
 <template>
   <div class="w-full h-full bg-dimmest text-dimmest flex justify-between items-center px-6">
     <!-- logo and version -->
-    <div class="flex items-center gap-1.5 hover:cursor-pointer" @click="$router.push('/')">
+    <div class="flex items-center gap-1.5 hover:cursor-pointer" @click="goHome">
       <!-- icon -->
       <HeaderIcon />
       <!-- version -->
@@ -12,6 +12,31 @@
       </div>
     </div>
     <div class="w-full grow flex justify-end gap-6 pl-8 pr-4">
+      <!-- workspace selector -->
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-dimmer">Workspace:</span>
+        <SLMenu class="w-48" down>
+          <template #default="{ open }">
+            <div class="px-3 py-1.5 border rounded hover:border-primary-default cursor-pointer">
+              <span class="text-sm">{{ workspaceStore.currentWorkspace }}</span>
+            </div>
+          </template>
+          <template #pop="{ close }">
+            <SLMenuItem
+              v-for="workspace in workspaces"
+              :key="workspace.name"
+              @click="selectWorkspace(workspace.name, close)"
+            >
+              <div class="flex justify-between items-center w-full">
+                <span class="text-sm">{{ workspace.name }}</span>
+                <span class="text-xs text-dimmer ml-2">({{ workspace.project_count }})</span>
+              </div>
+            </SLMenuItem>
+            <!-- 如果没有 workspace，显示默认值 -->
+            <div v-if="workspaces.length === 0" class="px-3 py-2 text-sm text-dimmer">No workspaces</div>
+          </template>
+        </SLMenu>
+      </div>
       <!-- links -->
       <div class="pl-6 items-center font-semibold gap-6 md:flex hidden">
         <a
@@ -55,12 +80,19 @@
  * @since: 2024-01-09 11:13:20
  **/
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import HeaderIcon from './HeaderIcon.vue'
 import SLIcon from '@swanlab-vue/components/SLIcon.vue'
+import SLMenu from '@swanlab-vue/components/menu/SLMenu.vue'
+import SLMenuItem from '@swanlab-vue/components/menu/SLMenuItem.vue'
 import { getDefaultLang } from '@swanlab-vue/i18n'
 import { useI18n } from 'vue-i18n'
 import { t } from '@swanlab-vue/i18n'
+import { useWorkspaceStore } from '@swanlab-vue/store'
+import { useRouter } from 'vue-router'
+import http from '@swanlab-vue/api/http'
+
+const router = useRouter()
 
 defineProps({
   version: {
@@ -100,6 +132,39 @@ const fixeds = ref([
     link: 'https://github.com/SwanHubX/SwanLab'
   }
 ])
+
+// ---------------------------------- 跳转到首页 ----------------------------------
+const goHome = () => {
+  router.push('/')
+}
+
+// ---------------------------------- workspace 选择 ----------------------------------
+const workspaceStore = useWorkspaceStore()
+const workspaces = ref([])
+
+// 加载 workspace 列表
+const loadWorkspaces = async () => {
+  try {
+    const { data } = await http.get('/cloud/workspaces')
+    if (data && data.workspaces) {
+      workspaces.value = data.workspaces
+    }
+  } catch (error) {
+    console.error('Failed to load workspaces:', error)
+    // 如果加载失败，使用默认值
+    workspaces.value = [{ name: 'default', project_count: 0 }]
+  }
+}
+
+// 页面加载时获取 workspace 列表
+loadWorkspaces()
+
+const selectWorkspace = async (workspace, close) => {
+  workspaceStore.setWorkspace(workspace)
+  close()
+  // 触发重新加载 projects
+  window.location.reload()
+}
 
 // ---------------------------------- 切换语言 ----------------------------------
 const nowLangKey = ref(getDefaultLang())

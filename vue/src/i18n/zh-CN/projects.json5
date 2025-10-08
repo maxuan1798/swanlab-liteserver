@@ -1,0 +1,11 @@
+{
+  title: '项目',
+  description: '选择一个项目以查看实验和图表',
+  card: {
+    experiments: '个实验',
+  },
+  empty: {
+    title: '暂无项目',
+    description: '创建一个新项目开始使用',
+  },
+}

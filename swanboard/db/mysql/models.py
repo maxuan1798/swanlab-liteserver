@@ -164,18 +164,15 @@ class CloudNamespace(CloudBaseModel):
     """云端命名空间表"""
 
     id = IntegerField(primary_key=True)
-    experiment = ForeignKeyField(CloudExperiment, backref='namespaces', on_delete='CASCADE')
-    name = CharField(max_length=100, index=True)
+    name = CharField(max_length=100, unique=True, index=True)  # 移除experiment关联，全局唯一
     sort_order = IntegerField(null=True)
+    opened = BooleanField(default=True)  # namespace是否打开显示
 
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now)
 
     class Meta:
         table_name = 'cloud_namespaces'
-        indexes = (
-            (('experiment', 'name'), True),  # 同一实验内命名空间名唯一
-        )
 
     def save(self, *args, **kwargs):
         self.updated_at = datetime.now()

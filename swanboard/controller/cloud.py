@@ -426,3 +426,34 @@ async def get_project_experiments(
     except Exception as e:
         swanlog.error(f"Get project experiments error: {e}")
         return DATA_ERROR_500(f"Failed to get project experiments: {e}")
+
+
+async def get_workspaces(
+    authorization: Optional[str] = Header(None)
+) -> Dict[str, Any]:
+    """
+    获取所有工作空间列表
+
+    GET /api/v1/cloud/workspaces
+
+    Returns:
+        工作空间列表
+    """
+    # 验证API密钥
+    if not connection_manager.validate_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # 使用 NamespaceRepository 获取所有工作空间
+        from ..repositories import namespace_repository
+
+        workspace_list = namespace_repository.get_all_workspaces()
+
+        return SUCCESS_200({
+            "workspaces": workspace_list,
+            "total": len(workspace_list)
+        })
+
+    except Exception as e:
+        swanlog.error(f"Get workspaces error: {e}")
+        return DATA_ERROR_500(f"Failed to get workspaces: {e}")

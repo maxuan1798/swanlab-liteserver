@@ -19,7 +19,8 @@ from ..controller.cloud import (
     sync_column,
     update_experiment_status,
     get_workspace_projects,
-    get_project_experiments
+    get_project_experiments,
+    get_workspaces
 )
 
 # ================================== Pydantic Models for API Documentation ==================================
@@ -253,6 +254,19 @@ async def create_or_sync_column(
 
 
 # ================================== 查询相关路由 ==================================
+
+@router.get("/workspaces")
+async def list_workspaces(
+    authorization: Optional[str] = Header(None)
+):
+    """
+    获取所有工作空间列表
+
+    Returns:
+        工作空间列表
+    """
+    return await get_workspaces(authorization)
+
 
 @router.get("/workspaces/{workspace}/projects")
 async def list_workspace_projects(
