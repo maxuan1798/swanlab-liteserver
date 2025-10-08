@@ -73,6 +73,7 @@
 import { useProjectStore } from '@swanlab-vue/store'
 import { formatTime, getDuration } from '@swanlab-vue/utils/time'
 import { computed, ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import SLStatusLabel from '@swanlab-vue/components/SLStatusLabel.vue'
 import ExperimentName from './components/ExperimentName.vue'
 import { transTime } from '@swanlab-vue/utils/time'
@@ -84,6 +85,9 @@ import TableBar from './components/TableBar.vue'
 import { formatNumber2SN } from '@swanlab-vue/utils/common'
 
 const projectStore = useProjectStore()
+const route = useRoute()
+const projectId = route.params.projectId
+
 const experiments = computed(() => {
   // 在最前面判断项目信息是否存在，不存在则是后端未开启/没有项目
   if (typeof projectStore.experiments === 'undefined') {
@@ -179,6 +183,7 @@ const summaries = ref({})
 http
   .get('/project/summaries', {
     params: {
+      project_id: projectId,
       // 传递前端显示的所有实验名称，使用字符串格式，每个实验名称之间使用逗号连接
       experiment_names: (() => {
         let experiment_names = []

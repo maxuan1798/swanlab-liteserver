@@ -14,8 +14,8 @@ export const useProjectStore = defineStore('project', () => {
   const description = computed(() => (project.value?.description ? project.value.description : ''))
   const experiments = computed(() => project.value?.experiments)
   const sum = computed(() => project.value?.experiments.length)
-  const createTime = computed(() => project.value?.create_time)
-  const updateTime = computed(() => project.value?.update_time)
+  const createTime = computed(() => project.value?.created_at)
+  const updateTime = computed(() => project.value?.updated_at)
   const logdir = computed(() => project.value?.logdir)
   // 色盘
   const colors = computed(() => {

@@ -32,7 +32,7 @@ def _(project_id: int = DEFAULT_PROJECT_ID):
 
 
 @router.get("/summaries")
-def _():
+def _(project_id: int = DEFAULT_PROJECT_ID):
     """获取项目总结信息
 
     Returns
@@ -41,7 +41,7 @@ def _():
         项目下每个实验的总结信息
     """
 
-    return get_project_summary()
+    return get_project_summary(project_id)
 
 
 @router.patch("/update")

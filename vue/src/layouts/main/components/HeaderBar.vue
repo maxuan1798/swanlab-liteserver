@@ -1,17 +1,18 @@
 <template>
   <div class="w-full h-full bg-dimmest text-dimmest flex justify-between items-center px-6">
-    <!-- logo and version -->
-    <div class="flex items-center gap-1.5 hover:cursor-pointer" @click="goHome">
-      <!-- icon -->
-      <HeaderIcon />
-      <!-- version -->
-      <div class="flex items-end">
-        <span class="font-semibold mr-0.5">SwanLab</span>
-        <!-- 版本号被注释了 -->
-        <!-- <span class="whitespace-nowrap text-xs pl-2 text-dimmer"> {{ formatVersion(version) }}</span> -->
+    <!-- logo, version and workspace selector -->
+    <div class="flex items-center gap-6">
+      <!-- logo and version -->
+      <div class="flex items-center gap-1.5 hover:cursor-pointer" @click="goHome">
+        <!-- icon -->
+        <HeaderIcon />
+        <!-- version -->
+        <div class="flex items-end">
+          <span class="font-semibold mr-0.5">SwanLab</span>
+          <!-- 版本号被注释了 -->
+          <!-- <span class="whitespace-nowrap text-xs pl-2 text-dimmer"> {{ formatVersion(version) }}</span> -->
+        </div>
       </div>
-    </div>
-    <div class="w-full grow flex justify-end gap-6 pl-8 pr-4">
       <!-- workspace selector -->
       <div class="flex items-center gap-2">
         <span class="text-sm text-dimmer">Workspace:</span>
@@ -37,6 +38,8 @@
           </template>
         </SLMenu>
       </div>
+    </div>
+    <div class="w-full grow flex justify-end gap-6 pl-8 pr-4">
       <!-- links -->
       <div class="pl-6 items-center font-semibold gap-6 md:flex hidden">
         <a
