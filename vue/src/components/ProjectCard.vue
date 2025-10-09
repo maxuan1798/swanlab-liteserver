@@ -1,8 +1,5 @@
 <template>
-  <div
-    class="project-card"
-    @click="handleClick"
-  >
+  <div class="project-card" @click="handleClick">
     <div class="project-icon">
       <SLIcon icon="runs" class="w-8 h-8" />
     </div>

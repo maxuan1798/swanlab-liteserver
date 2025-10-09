@@ -14,7 +14,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** getter */
   const projectList = computed(() => projects.value)
   const currentProject = computed(() => {
-    return projects.value.find(p => p.id === currentProjectId.value)
+    return projects.value.find((p) => p.id === currentProjectId.value)
   })
 
   /** action */
@@ -34,7 +34,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const setProjects = (projectList) => {
     projects.value = projectList
     // 如果当前没有选中的项目，或者选中的项目不在列表中，自动选中第一个
-    if (!currentProjectId.value || !projectList.find(p => p.id === currentProjectId.value)) {
+    if (!currentProjectId.value || !projectList.find((p) => p.id === currentProjectId.value)) {
       if (projectList.length > 0) {
         setCurrentProject(projectList[0].id)
       }

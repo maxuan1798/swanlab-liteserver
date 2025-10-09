@@ -256,6 +256,7 @@ const blobsData = {}
  * 解析 log 数据
  */
 const changeData2Audio = (data) => {
+  console.log("changeData2Audio", data)
   let _maxIndex = 0
   let _minIndex = Infinity
   for (const source in data) {
@@ -278,7 +279,7 @@ const changeData2Audio = (data) => {
         for (let i = 0; i < item.data.length; i++) {
           stepsData.value[item.index][source].push({
             filename: item.data[i],
-            caption: item.more[i]?.caption,
+            // caption: item.more[i]?.caption,
             experiment_id
           })
         }

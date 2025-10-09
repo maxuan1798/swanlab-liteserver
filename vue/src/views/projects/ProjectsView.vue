@@ -8,12 +8,7 @@
 
       <!-- 项目列表 -->
       <div v-else-if="projects.length > 0" class="projects-grid">
-        <ProjectCard
-          v-for="project in projects"
-          :key="project.id"
-          :project="project"
-          @click="navigateToProject"
-        />
+        <ProjectCard v-for="project in projects" :key="project.id" :project="project" @click="navigateToProject" />
       </div>
 
       <!-- 空状态 -->

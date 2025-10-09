@@ -40,9 +40,7 @@ const loadProjects = async () => {
 
       // 如果有保存的 currentProjectId，尝试加载该项目
       const savedProjectId = localStorage.getItem('currentProjectId')
-      const projectToLoad = savedProjectId
-        ? data.projects.find(p => p.id == savedProjectId)
-        : data.projects[0]
+      const projectToLoad = savedProjectId ? data.projects.find((p) => p.id == savedProjectId) : data.projects[0]
 
       if (projectToLoad) {
         // 加载选中的项目详情
