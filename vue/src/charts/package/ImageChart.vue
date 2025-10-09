@@ -444,7 +444,7 @@ const changeData2Image = (data) => {
         for (let i = 0; i < item.data.length; i++) {
           stepsData.value[item.index][source].push({
             filename: item.data[i],
-            caption: item.more[i]?.caption,
+            // caption: item.more[i]?.caption,
             experiment_id
           })
         }

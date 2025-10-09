@@ -357,6 +357,31 @@ class TagRepository(BaseRepository[CloudTag]):
     def __init__(self):
         super().__init__(CloudTag)
 
+    def get_experiment_tag_folder(self, experiment_id: int, tag_name: str) -> Optional[str]:
+        """
+        根据实验ID和标签名获取标签文件夹路径
+
+        Args:
+            experiment_id: 实验ID
+            tag_name: 标签名称
+
+        Returns:
+            str: 标签文件夹路径，不存在返回None
+        """
+        if not self.ensure_connection():
+            return None
+
+        try:
+            tag = CloudTag.get(
+                (CloudTag.experiment == experiment_id) & (CloudTag.name == tag_name)
+            )
+            return tag.folder if tag else None
+        except CloudTag.DoesNotExist:
+            return None
+        except Exception as e:
+            swanlog.error(f"Failed to get tag folder for experiment {experiment_id}, tag '{tag_name}': {e}")
+            return None
+
     def get_experiment_tags(self, experiment_id: int) -> List[Dict[str, Any]]:
         """
         获取实验的所有标签

@@ -92,3 +92,17 @@ def get_tag_dir(name, tag) -> str:
 def get_media_dir(name, tag) -> str:
     """获取 media 对应的目录路径"""
     return os.path.join(SWANLOG_DIR, name, MEDIA, tag)
+
+
+# ---------------------------------- MinIO 配置 ----------------------------------
+
+def get_minio_config() -> dict:
+    """获取 MinIO 配置"""
+    return {
+        "enabled": os.getenv("SWANLAB_ENABLE_MINIO", "false").lower() in ("true", "1", "yes"),
+        "endpoint": os.getenv("MINIO_ENDPOINT", "http://localhost:9000"),
+        "access_key": os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+        "secret_key": os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+        "bucket": os.getenv("MINIO_BUCKET", "swanlab-media"),
+        "region": os.getenv("MINIO_REGION", "us-east-1"),
+    }
