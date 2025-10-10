@@ -60,7 +60,7 @@ class EnhancedSwanBoardCallback(SwanBoardCallback):
                     'Authorization': f'Bearer {self.cloud_api_key}'
                 })
 
-            swanlog.info(f"HTTP cloud sync enabled - API: {self.cloud_api_base}, Workspace: {self.cloud_workspace}")
+            swanlog.info(f"Self Host enabled - API: {self.cloud_api_base}, Workspace: {self.cloud_workspace}")
 
     # def on_runtime_info_update(self, r: RuntimeInfo):
         """
@@ -95,7 +95,7 @@ class EnhancedSwanBoardCallback(SwanBoardCallback):
 
         try:
             url = f"{self.cloud_api_base.rstrip('/')}/{endpoint.lstrip('/')}"
-            swanlog.info(f"HTTP cloud sync request - URL: {url}")
+            swanlog.debug(f"Self Host request - URL: {url}")
             # 添加时间戳
             data['timestamp'] = datetime.now().isoformat()
 
