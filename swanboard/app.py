@@ -28,9 +28,9 @@ load_dotenv()
 
 # 服务全局对象 - 配置OpenAPI文档
 app = FastAPI(
-    title="SwanLab-Dashboard API",
+    title="SwanLab-Server API",
     description="""
-    SwanLab-Dashboard API provides comprehensive endpoints for managing machine learning experiments,
+    SwanLab-Server API provides comprehensive endpoints for managing machine learning experiments,
     projects, and cloud synchronization.
 
     ## Features

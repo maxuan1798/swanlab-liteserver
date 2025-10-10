@@ -31,7 +31,7 @@ SwanLab Cloud API提供了一套完整的HTTP接口，支持：
 ### 1. 启动SwanLab-Dashboard服务
 
 ```bash
-cd SwanLab-Dashboard
+cd SwanLab-Server
 python -m uvicorn swanboard.app:app --host 0.0.0.0 --port 5173
 ```
 
@@ -454,7 +454,7 @@ echo "Updated experiment status: $(echo $STATUS_RESPONSE | jq -r '.data.status_t
 ### 运行测试
 
 ```bash
-cd SwanLab-Dashboard
+cd SwanLab-Server
 python test/test_cloud_api.py
 ```
 

@@ -15,7 +15,7 @@ from ..settings import get_media_dir, get_minio_config
 from ..utils.minio_client import get_minio_client
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from ..db import Experiment, Tag
+from ..db.mysql import CloudExperiment as Experiment, CloudTag as Tag
 import os
 
 from ..repositories import (

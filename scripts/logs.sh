@@ -1,5 +1,5 @@
 #!/bin/bash
-# SwanLab-Dashboard Docker日志查看脚本
+# SwanLab-Server Docker日志查看脚本
 
 set -e
 

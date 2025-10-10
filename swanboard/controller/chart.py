@@ -5,9 +5,9 @@ r"""
 @File: swanlab/server/controller/chart.py
 @IDE: vscode
 @Description:
-    图表相关操作api
+    图表相关操作api - 云端版本
 """
-from .db import Chart
+from ..db.mysql import CloudChart as Chart
 from .utils import get_exp_charts, get_proj_charts
 from ..module import SUCCESS_200, PARAMS_ERROR_422
 

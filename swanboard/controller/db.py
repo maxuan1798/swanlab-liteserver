@@ -5,6 +5,30 @@ r"""
 @File: swanlab/server/controller/db.py
 @IDE: vscode
 @Description:
-    数据库，从数据库模块中导入数据库相关函数，供其他模块调用，不用每次都通过相对路径导入了
+    数据库模块导入 - 云端版本
+    仅导出 MySQL 和 ClickHouse 相关模块
 """
-from ..db import *
+from ..db.mysql import (
+    CloudProject,
+    CloudExperiment,
+    CloudChart,
+    CloudTag,
+    CloudNamespace,
+    CloudSource,
+    CloudDisplay,
+    CloudBaseModel,
+)
+from ..db.clickhouse import ClickHouseManager, clickhouse_manager
+
+__all__ = [
+    'CloudProject',
+    'CloudExperiment',
+    'CloudChart',
+    'CloudTag',
+    'CloudNamespace',
+    'CloudSource',
+    'CloudDisplay',
+    'CloudBaseModel',
+    'ClickHouseManager',
+    'clickhouse_manager',
+]

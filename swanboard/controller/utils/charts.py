@@ -5,9 +5,9 @@ r"""
 @File: swanlab/server/controller/utils/charts.py
 @IDE: vscode
 @Description:
-    图表相关函数
+    图表相关函数 - 云端版本
 """
-from ..db import Chart, Display, Namespace
+from ...db.mysql import CloudChart as Chart, CloudDisplay as Display, CloudNamespace as Namespace
 from typing import List, Union
 
 

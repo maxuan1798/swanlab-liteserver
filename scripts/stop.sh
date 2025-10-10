@@ -1,5 +1,5 @@
 #!/bin/bash
-# SwanLab-Dashboard Docker停止脚本
+# SwanLab-Server Docker停止脚本
 
 set -e
 

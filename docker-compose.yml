@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # MySQL数据库服务
   mysql:
@@ -31,6 +33,69 @@ services:
       retries: 10
       interval: 30s
       start_period: 60s
+
+  # ClickHouse 数据库（从 docker-compose-db 合并）
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: swanlab-clickhouse
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9002:9000"  # Native interface (host:container)
+    environment:
+      CLICKHOUSE_DB: swanlab
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASS:-password123}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/init:/docker-entrypoint-initdb.d
+    networks:
+      - swanlab-network
+
+  # Fluent Bit 日志收集器（从 docker-compose-db 合并）
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    container_name: swanlab-fluent-bit
+    ports:
+      - "24224:24224"  # HTTP input
+      - "2020:2020"    # Monitoring
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASS: ${CLICKHOUSE_PASS:-}
+      LOG_PATH: ${LOG_PATH:-/logs/*.log}
+      FLB_LOG_LEVEL: ${FLB_LOG_LEVEL:-debug}
+    volumes:
+      - ./services/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+      - ./services/parsers.conf:/conf/parsers.conf
+      - ${LOG_DIR:-./logs}:/logs
+      - fluent_bit_data:/data
+    depends_on:
+      - clickhouse
+    networks:
+      - swanlab-network
+
+  # MinIO 对象存储（从 docker-compose-db 合并）
+  minio:
+    image: minio/minio:latest
+    container_name: swanlab-minio
+    ports:
+      - "9000:9000"     # API port
+      - "9001:9001"     # Console port
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - swanlab-network
 
   # SwanLab-Dashboard服务
   swanlab-dashboard:
@@ -126,7 +191,7 @@ networks:
   swanlab-network:
     driver: bridge
 
-# 数据卷配置
+# 数据卷配置（合并所有服务所需卷）
 volumes:
   mysql_data:
     driver: local
@@ -135,4 +200,10 @@ volumes:
   swanlab_logs:
     driver: local
   redis_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+  fluent_bit_data:
+    driver: local
+  minio_data:
     driver: local

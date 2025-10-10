@@ -1,5 +1,5 @@
 #!/bin/bash
-# SwanLab-Dashboard Docker重启脚本
+# SwanLab-Server Docker重启脚本
 
 set -e
 

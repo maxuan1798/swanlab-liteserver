@@ -2,31 +2,54 @@
 # -*- coding: utf-8 -*-
 r"""
 @DATE: 2024-01-16 10:52:10
-@File: swanlab\db\__init__.py
+@File: swanboard\db\__init__.py
 @IDE: vscode
 @Description:
-    数据库模型模块，在设计上应该在data模块或者server模块被初始化完毕后导入
-    导入之前必须确保文件路径存在，否则会报错
+    数据库模块 - 云端版本
+    仅包含 MySQL 和 ClickHouse 支持，SQLite 已移除
 """
-from .models import (
-    Project,
-    Experiment,
-    Tag,
-    Chart,
-    Namespace,
-    Source,
-    Display,
+
+# MySQL 云端数据库
+from .mysql import (
+    CloudProject,
+    CloudExperiment,
+    CloudChart,
+    CloudTag,
+    CloudNamespace,
+    CloudSource,
+    CloudDisplay,
+    CloudBaseModel,
+    CLOUD_MODELS,
+    connect_cloud_db,
+    is_cloud_db_connected,
+    mysql_manager,
+    MySQLConnectionManager,
+    MySQLConfig,
 )
-from .error import (
-    ExistedError,
-    NotExistedError,
-    ForeignProNotExistedError,
-    ForeignExpNotExistedError,
-    ForeignTagNotExistedError,
-    ForeignChartNotExistedError,
-    ForeignNameNotExistedError,
-    ChartTypeError,
-)
-from .table_config import tables
-from .db_connect import connect
-from .utils import add_multi_chart
+
+# ClickHouse 数据库
+from .clickhouse import ClickHouseManager, clickhouse_manager
+
+__all__ = [
+    # MySQL Models
+    'CloudProject',
+    'CloudExperiment',
+    'CloudChart',
+    'CloudTag',
+    'CloudNamespace',
+    'CloudSource',
+    'CloudDisplay',
+    'CloudBaseModel',
+    'CLOUD_MODELS',
+
+    # MySQL Connection
+    'connect_cloud_db',
+    'is_cloud_db_connected',
+    'mysql_manager',
+    'MySQLConnectionManager',
+    'MySQLConfig',
+
+    # ClickHouse
+    'ClickHouseManager',
+    'clickhouse_manager',
+]

@@ -1,4 +1,4 @@
-# SwanLab-Dashboard Dockerfile
+# SwanLab-Server Dockerfile
 FROM python:3.9-slim
 
 # 设置工作目录

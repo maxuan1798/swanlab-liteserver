@@ -1,10 +1,9 @@
 from ..module.resp import SUCCESS_200, NOT_FOUND_404, PARAMS_ERROR_422
-from .db import NotExistedError
 
-from .db import (
-    Namespace,
-    Experiment,
-    Project,
+from ..db.mysql import (
+    CloudNamespace as Namespace,
+    CloudExperiment as Experiment,
+    CloudProject as Project,
 )
 from ..repositories import namespace_repository
 
@@ -106,9 +105,8 @@ def change_namespace_opened(namespace_id: int, opened: int, experiment_id: int, 
         exp_or_proj.save()
         return SUCCESS_200(None)
     # 正常的namespace
-    try:
-        namespace: Namespace = Namespace.get_by_id(namespace_id)
-    except NotExistedError:
+    namespace: Namespace = Namespace.get_by_id(namespace_id)
+    if not namespace:
         return NOT_FOUND_404("Namespace with id {} does not exist.".format(namespace_id))
     namespace.opened = 1 if opened else 0
     namespace.save()

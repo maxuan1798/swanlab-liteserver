@@ -1,5 +1,5 @@
 #!/bin/bash
-# SwanLab-Dashboard Docker管理脚本
+# SwanLab-Server Docker管理脚本
 
 set -e
 

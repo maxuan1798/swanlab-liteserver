@@ -405,8 +405,8 @@ async def health_check():
 
     ### 检查项目
     - API服务状态
-    - 数据库连接状态
-    - 文件系统访问状态
+    - MySQL 数据库连接状态
+    - ClickHouse 数据库连接状态
 
     ### 返回状态
     - `healthy`: 所有服务正常运行
@@ -415,24 +415,32 @@ async def health_check():
     ### 无需认证
     此端点不需要API密钥，可用于监控和健康检查
     """
-    from ..utils import get_swanlog_dir
-    from ..db import connect
-    import os
+    from ..db.mysql import mysql_manager
+    from ..db.clickhouse import clickhouse_manager
+    from datetime import datetime
 
     try:
-        # 检查数据库连接
-        db_path = get_swanlog_dir()
-        db_available = os.path.exists(db_path)
+        # 检查 MySQL 连接
+        mysql_connected = mysql_manager.is_connected()
 
-        if db_available:
-            connect(autocreate=False, path=db_path)
+        # 检查 ClickHouse 连接
+        clickhouse_connected = clickhouse_manager.is_connected()
+
+        # 判断整体健康状态
+        overall_status = "healthy" if (mysql_connected and clickhouse_connected) else "degraded"
 
         return {
-            "status": "healthy",
-            "timestamp": "2024-11-26T16:50:00Z",
+            "status": overall_status,
+            "timestamp": datetime.now().isoformat(),
             "database": {
-                "available": db_available,
-                "path": db_path
+                "mysql": {
+                    "available": mysql_connected,
+                    "host": mysql_manager.host if hasattr(mysql_manager, 'host') else "unknown"
+                },
+                "clickhouse": {
+                    "available": clickhouse_connected,
+                    "host": clickhouse_manager.host if hasattr(clickhouse_manager, 'host') else "unknown"
+                }
             },
             "api_version": "v1"
         }
@@ -440,7 +448,7 @@ async def health_check():
         return {
             "status": "unhealthy",
             "error": str(e),
-            "timestamp": "2024-11-26T16:50:00Z"
+            "timestamp": datetime.now().isoformat()
         }
 
 

@@ -431,12 +431,12 @@ def main():
         response = requests.get("http://localhost:5173/api/v1/cloud/health", timeout=5)
         if response.status_code != 200:
             print("⚠️  SwanLab-Dashboard服务未运行，请先启动服务")
-            print("   命令: cd SwanLab-Dashboard && python -m uvicorn swanboard.app:app --host 0.0.0.0 --port 5173")
+            print("   命令: cd SwanLab-Server && python -m uvicorn swanboard.app:app --host 0.0.0.0 --port 5173")
             return False
     except requests.exceptions.ConnectionError:
         print("⚠️  无法连接到SwanLab-Dashboard服务 (http://localhost:5173)")
         print("   请确保服务正在运行:")
-        print("   cd SwanLab-Dashboard && python -m uvicorn swanboard.app:app --host 0.0.0.0 --port 5173")
+        print("   cd SwanLab-Server && python -m uvicorn swanboard.app:app --host 0.0.0.0 --port 5173")
         return False
     except Exception as e:
         print(f"⚠️  服务检查失败: {e}")
