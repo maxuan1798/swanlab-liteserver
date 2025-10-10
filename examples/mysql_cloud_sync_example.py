@@ -8,8 +8,6 @@ SwanLab MySQL云端同步使用示例
 
 import os
 import sys
-import time
-from typing import Dict, Any
 
 # 添加swanboard到Python路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))

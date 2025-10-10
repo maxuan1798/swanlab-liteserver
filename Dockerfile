@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制项目文件
-COPY . .
+COPY .. .
 
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt

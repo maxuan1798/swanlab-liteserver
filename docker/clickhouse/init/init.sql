@@ -72,4 +72,6 @@ CREATE TABLE IF NOT EXISTS metric (
     file_count Nullable(UInt32),
     metric_data Array(String)
 ) ENGINE = MergeTree()
-ORDER BY (run_id, column_id, step, timestamp);
+ORDER BY (run_id, column_id, step, timestamp)
+SETTINGS allow_nullable_key = 1;
+

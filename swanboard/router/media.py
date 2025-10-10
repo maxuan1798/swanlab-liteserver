@@ -32,8 +32,7 @@ router = APIRouter()
 
 # 初始化 MinIO 客户端（如果启用）
 minio_config = get_minio_config()
-minio_client = get_minio_client(minio_config) if minio_config.get("enabled") else None
-
+minio_client = get_minio_client(minio_config)
 
 # ---------------------------------- 音频相关 ----------------------------------
 
@@ -60,6 +59,8 @@ def _(path: str, tag: str, experiment_id: str):
         return NOT_FOUND_404(f"Tag {tag} not found in experiment {experiment_id}")
     print(f"tag_folder: {tag_folder}")
     # 如果启用了 MinIO，尝试从 MinIO 获取文件
+    print("minio_client:", minio_client)
+    print("minio_config:", minio_config)
     if minio_client:
         # MinIO 对象键格式: run_id/column_id/filename
         # path 已经包含了 filename，tag_folder 就是 column_id

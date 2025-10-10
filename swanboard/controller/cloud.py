@@ -379,7 +379,7 @@ async def sync_runtime_info(request: Request, authorization: Optional[str] = Hea
 
     try:
         body = await request.json()
-
+        print("sync_runtime_info body:", body)
         # 必需字段验证
         required_fields = ['experiment_id']
         for field in required_fields:

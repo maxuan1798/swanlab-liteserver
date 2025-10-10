@@ -17,3 +17,5 @@ psutil
 setuptools
 requests
 clickhouse_driver
+dotenv
+boto3

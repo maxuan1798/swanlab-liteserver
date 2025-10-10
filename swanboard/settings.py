@@ -99,7 +99,7 @@ def get_media_dir(name, tag) -> str:
 def get_minio_config() -> dict:
     """获取 MinIO 配置"""
     return {
-        "enabled": os.getenv("SWANLAB_ENABLE_MINIO", "false").lower() in ("true", "1", "yes"),
+        "enabled": os.getenv("SWANLAB_CLOUD_SYNC", "1").lower() in ("true", "1", "yes"),
         "endpoint": os.getenv("MINIO_ENDPOINT", "http://localhost:9000"),
         "access_key": os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
         "secret_key": os.getenv("MINIO_SECRET_KEY", "minioadmin"),
