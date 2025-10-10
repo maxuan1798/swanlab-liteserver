@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS cloud_namespaces (
 CREATE TABLE IF NOT EXISTS cloud_charts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     experiment_id INT NOT NULL,
-    chart_key VARCHAR(255) NOT NULL,
+    key VARCHAR(255) NOT NULL,
     chart_type VARCHAR(50) NOT NULL,
     reference VARCHAR(20) NOT NULL,
     config TEXT,
@@ -89,8 +89,8 @@ CREATE TABLE IF NOT EXISTS cloud_charts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_experiment (experiment_id),
-    INDEX idx_chart_key (chart_key),
-    UNIQUE KEY unique_experiment_key (experiment_id, chart_key),
+    INDEX idx_chart_key (key),
+    UNIQUE KEY unique_experiment_key (experiment_id, key),
     FOREIGN KEY (experiment_id) REFERENCES cloud_experiments(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
