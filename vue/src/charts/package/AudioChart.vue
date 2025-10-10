@@ -256,7 +256,7 @@ const blobsData = {}
  * 解析 log 数据
  */
 const changeData2Audio = (data) => {
-  console.log("changeData2Audio", data)
+  console.log('changeData2Audio', data)
   let _maxIndex = 0
   let _minIndex = Infinity
   for (const source in data) {
