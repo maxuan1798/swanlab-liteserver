@@ -30,9 +30,7 @@ from ..module.resp import (
 
 router = APIRouter()
 
-# 初始化 MinIO 客户端（如果启用）
-minio_config = get_minio_config()
-minio_client = get_minio_client(minio_config)
+minio_client = get_minio_client()
 
 # ---------------------------------- 音频相关 ----------------------------------
 
@@ -45,22 +43,14 @@ def _(path: str, tag: str, experiment_id: str):
 
     优先级：MinIO (如果启用) > 本地文件系统
     """
-    print(f"path: {path}")
-    print(f"experiment_id: {experiment_id}")
-    print(f"tag: {tag}")
     # 获取实验信息
     experiment = experiment_repository.get_by_id(experiment_id)
     if not experiment:
         return NOT_FOUND_404(f"Experiment with id {experiment_id} not found")
     run_id = experiment.run_id
-    print(f"run_id: {run_id}")
     tag_folder = tag_repository.get_experiment_tag_folder(experiment_id, tag)
     if not tag_folder:
         return NOT_FOUND_404(f"Tag {tag} not found in experiment {experiment_id}")
-    print(f"tag_folder: {tag_folder}")
-    # 如果启用了 MinIO，尝试从 MinIO 获取文件
-    print("minio_client:", minio_client)
-    print("minio_config:", minio_config)
     if minio_client:
         # MinIO 对象键格式: run_id/column_id/filename
         # path 已经包含了 filename，tag_folder 就是 column_id
