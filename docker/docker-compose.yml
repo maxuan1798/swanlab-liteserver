@@ -39,8 +39,8 @@ services:
     image: clickhouse/clickhouse-server:latest
     container_name: swanlab-clickhouse
     ports:
-      - "8123:8123"  # HTTP interface
-      - "9002:9000"  # Native interface (host:container)
+      - "18123:8123"  # HTTP interface (host -> container)，由 8123 调整到 18123
+      - "19000:9000"  # Native interface (host -> container)，由 9002 调整到 19000
     environment:
       CLICKHOUSE_DB: swanlab
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
@@ -90,8 +90,8 @@ services:
     image: minio/minio:latest
     container_name: swanlab-minio
     ports:
-      - "9000:9000"     # API port
-      - "9001:9001"     # Console port
+      - "9100:9000"     # API port (host -> container)，由 9000 调整到 9100
+      - "9101:9001"     # Console port (host -> container)，由 9001 调整到 9101
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
@@ -174,7 +174,7 @@ services:
     container_name: swanlab-redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-16379}:6379"   # 将宿主机默认端口从 6379 改为 16379，容器内部仍为 6379
     volumes:
       - redis_data:/data
     networks:
