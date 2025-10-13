@@ -36,6 +36,5 @@ runs/
 LightningTest/
 
 swanboard/template
-/docker/clickhouse_data
-/docker/mysql_data/
+/docker/clickhouse_data/
 /docker/mysql_data/
