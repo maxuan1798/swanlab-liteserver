@@ -39,7 +39,7 @@ services:
     image: clickhouse/clickhouse-server:latest
     container_name: swanlab-clickhouse
     ports:
-      - "18123:8123"  # HTTP interface (host -> container)，由 8123 调整到 18123
+      - "22225:8123"  # HTTP interface (host -> container)，由 8123 调整到 18123
       - "19000:9000"  # Native interface (host -> container)，由 9002 调整到 19000
     environment:
       CLICKHOUSE_DB: swanlab
@@ -188,6 +188,30 @@ services:
       timeout: 3s
       retries: 5
       interval: 10s
+
+  # Nginx 反向代理服务
+  nginx:
+    image: nginx:alpine
+    container_name: swanlab-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-22224}:80"
+      # - "${NGINX_HTTPS_PORT:-22443}:443"  # HTTPS端口（可选）
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./nginx/ssl:/etc/nginx/ssl:ro  # SSL证书（可选）
+    networks:
+      - swanlab-network
+    depends_on:
+      swanlab-server:
+        condition: service_healthy
+      fluent-bit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      timeout: 5s
+      retries: 3
+      interval: 30s
 
 # 网络配置
 networks:
