@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS cloud_experiments (
     UNIQUE KEY unique_project_sort (project_id, sort_order),
     CONSTRAINT check_sort_order CHECK (sort_order >= 0),
     FOREIGN KEY (project_id) REFERENCES cloud_projects(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 创建云端命名空间表
 CREATE TABLE IF NOT EXISTS cloud_namespaces (
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS cloud_namespaces (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 创建云端图表表
 CREATE TABLE IF NOT EXISTS cloud_charts (
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS cloud_charts (
     INDEX idx_chart_key (key),
     UNIQUE KEY unique_experiment_key (experiment_id, key),
     FOREIGN KEY (experiment_id) REFERENCES cloud_experiments(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 创建云端标签表
 CREATE TABLE IF NOT EXISTS cloud_tags (
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS cloud_tags (
     INDEX idx_experiment (experiment_id),
     INDEX idx_name (name),
     FOREIGN KEY (experiment_id) REFERENCES cloud_experiments(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 创建云端数据源表
 CREATE TABLE IF NOT EXISTS cloud_sources (
@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS cloud_sources (
     INDEX idx_chart (chart_id),
     FOREIGN KEY (tag_id) REFERENCES cloud_tags(id) ON DELETE CASCADE,
     FOREIGN KEY (chart_id) REFERENCES cloud_charts(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 创建云端显示配置表
 CREATE TABLE IF NOT EXISTS cloud_displays (
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS cloud_runtime_info (
 
     INDEX idx_experiment (experiment_id),
     FOREIGN KEY (experiment_id) REFERENCES cloud_experiments(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 插入示例数据（可选）
 INSERT IGNORE INTO cloud_projects (id, name, description, workspace, owner, visibility) VALUES
