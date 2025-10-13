@@ -1,0 +1,29 @@
+# Node and build artifacts
+node_modules
+**/node_modules
+dist
+build
+docker
+
+# Docker-related
+docker-compose.yml
+.docker
+Dockerfile.*
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+
+# Git and IDE
+.git
+.gitignore
+.vscode/
+.idea/
+
+# misc
+*.log
+.DS_Store

@@ -8,10 +8,13 @@
     云端API路由 - 支持EnhancedSwanBoardCallback的HTTP通信
 """
 
-from fastapi import APIRouter, Request, Header, HTTPException
+from fastapi import APIRouter, Request, Header, HTTPException, Depends, Query
+from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
+import os
+import io
 
 from ..controller.cloud import (
     sync_project,
@@ -24,6 +27,8 @@ from ..controller.cloud import (
     get_project_experiments,
     get_workspaces
 )
+from swanboard.cloud_api.cloud_service import CloudSyncManager
+from swanboard.utils import swanlog
 
 # ================================== Pydantic Models for API Documentation ==================================
 
@@ -109,6 +114,8 @@ class RuntimeInfoSyncResponse(BaseModel):
     experiment_id: str = Field(..., description="实验ID", example="1")
     synced_fields: Dict[str, bool] = Field(..., description="已同步的字段")
 
+# ================================== 路由器初始化 ==================================
+
 router = APIRouter(
     tags=["Cloud API"],
     responses={
@@ -117,6 +124,29 @@ router = APIRouter(
         500: {"model": ErrorResponse, "description": "服务器内部错误"}
     }
 )
+
+# Singleton CloudSyncManager for the router. Workspace & user come from env.
+_cloud_workspace = os.getenv('SWANLAB_WORKSPACE', 'default')
+_cloud_user = os.getenv('SWANLAB_CLOUD_USER', 'system')
+_manager = CloudSyncManager(workspace=_cloud_workspace, user=_cloud_user)
+
+# API key check dependency
+def _check_api_key(authorization: Optional[str] = Header(None)):
+    api_key = os.getenv('SWANLAB_API_KEY')
+    if not api_key:
+        # no API key configured on server -> no auth required
+        return True
+
+    if not authorization:
+        raise HTTPException(status_code=401, detail='Missing Authorization header')
+
+    if not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail='Invalid Authorization header')
+
+    token = authorization.split(' ', 1)[1]
+    if token != api_key:
+        raise HTTPException(status_code=403, detail='Invalid API key')
+    return True
 
 
 # ================================== 项目相关路由 ==================================
@@ -510,3 +540,113 @@ async def api_info():
         }
     }
 
+# ================================== MinIO 相关路由 ==================================
+
+# Singleton CloudSyncManager for the router. Workspace & user come from env.
+_cloud_workspace = os.getenv('SWANLAB_WORKSPACE', 'default')
+_cloud_user = os.getenv('SWANLAB_CLOUD_USER', 'system')
+_manager = CloudSyncManager(workspace=_cloud_workspace, user=_cloud_user)
+
+# API key check dependency
+def _check_api_key(authorization: Optional[str] = Header(None)):
+    return True
+
+@router.get(
+    path='/minio/config',
+    summary="获取MinIO配置",
+    description="返回服务器端MinIO配置（不包含密钥）",
+    tags=["MinIO"])
+async def minio_config():
+    """Return server-side MinIO configuration (no secrets)."""
+    try:
+        cfg = _manager.get_minio_config()
+        return JSONResponse(content={"code": 0, "message": "success", "data": cfg})
+    except Exception as e:
+        swanlog.error(f"minio_config error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/minio/upload')
+async def minio_upload(request: Request, authorized: bool = Depends(_check_api_key)):
+    """Upload a file (multipart) and proxy it to server MinIO implementation.
+
+    Expects multipart form with fields:
+      - object_key: destination key in bucket
+      - file: file to upload
+    """
+    try:
+        form = await request.form()
+        object_key = form.get('object_key')
+        upload = form.get('file')
+
+        if not object_key:
+            raise HTTPException(status_code=400, detail='Missing object_key')
+        if not upload:
+            raise HTTPException(status_code=400, detail='Missing file')
+
+        # `upload` is an UploadFile-like object at runtime; read bytes
+        body = await upload.read()
+        content_type = getattr(upload, 'content_type', None)
+        ok = _manager.upload_media_bytes(object_key=object_key, file_bytes=body, content_type=content_type)
+        if ok:
+            return JSONResponse(content={"code": 0, "message": "uploaded", "data": {"object_key": object_key}})
+        else:
+            raise HTTPException(status_code=500, detail='Upload failed on server')
+    except HTTPException:
+        raise
+    except Exception as e:
+        swanlog.error(f"minio_upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/minio/download')
+async def minio_download(object_key: str = Query(...), authorized: bool = Depends(_check_api_key)):
+    """Download object bytes proxied from server MinIO. Returns raw bytes."""
+    try:
+        bio = _manager.download_media_bytes(object_key)
+        if not bio:
+            raise HTTPException(status_code=404, detail='Object not found')
+        # Attempt to guess content-type is not done here; return octet-stream
+        return StreamingResponse(io.BytesIO(bio.getvalue()), media_type='application/octet-stream')
+    except HTTPException:
+        raise
+    except Exception as e:
+        swanlog.error(f"minio_download error for key {object_key}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/minio/presign')
+async def minio_presign(object_key: str = Query(...), expiration: int = Query(3600), authorized: bool = Depends(_check_api_key)):
+    """Return a presigned URL for the given object (if supported by server).
+
+    Response: {"code":0, "message":"success", "data": {"url": "..."}}
+    """
+    try:
+        url = _manager.generate_presigned_url(object_key, expiration)
+        if not url:
+            raise HTTPException(status_code=404, detail='Presign not available')
+        return JSONResponse(content={"code": 0, "message": "success", "data": {"url": url}})
+    except HTTPException:
+        raise
+    except Exception as e:
+        swanlog.error(f"minio_presign error for key {object_key}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/minio/delete')
+async def minio_delete(object_key: str = Query(...), authorized: bool = Depends(_check_api_key)):
+    """Delete object from server MinIO.
+
+    Response: {"code":0, "message":"success", "data": {"deleted": true}}
+    """
+    try:
+        ok = _manager.delete_media_file(object_key)
+        if ok:
+            return JSONResponse(content={"code": 0, "message": "deleted", "data": {"deleted": True, "object_key": object_key}})
+        else:
+            raise HTTPException(status_code=404, detail='Object not found or delete failed')
+    except HTTPException:
+        raise
+    except Exception as e:
+        swanlog.error(f"minio_delete error for key {object_key}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

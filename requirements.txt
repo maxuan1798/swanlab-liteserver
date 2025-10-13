@@ -19,3 +19,4 @@ requests
 clickhouse_driver
 dotenv
 boto3
+python-multipart

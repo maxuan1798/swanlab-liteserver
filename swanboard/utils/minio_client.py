@@ -97,35 +97,3 @@ class MinIOClient:
 
 # 全局 MinIO 客户端实例
 _minio_client: Optional[MinIOClient] = None
-
-
-def get_minio_client(config: dict = None) -> Optional[MinIOClient]:
-    """
-    获取 MinIO 客户端单例
-
-    :param config: MinIO 配置字典
-    :return: MinIO 客户端实例，如果未启用则返回 None
-    """
-    global _minio_client
-
-    # 如果已经初始化且配置未改变，直接返回
-    if _minio_client is not None and config is None:
-        return _minio_client
-
-    # 如果提供了配置，重新初始化
-    if config and config.get("enabled", False):
-        try:
-            _minio_client = MinIOClient(
-                endpoint=config["endpoint"],
-                access_key=config["access_key"],
-                secret_key=config["secret_key"],
-                bucket_name=config["bucket"],
-                region=config.get("region", "us-east-1"),
-            )
-            return _minio_client
-        except Exception as e:
-            print(f"Failed to initialize MinIO client: {e}")
-            return None
-
-    # 如果未启用 MinIO，返回 None
-    return None

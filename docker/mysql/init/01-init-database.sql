@@ -89,8 +89,8 @@ CREATE TABLE IF NOT EXISTS cloud_charts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_experiment (experiment_id),
-    INDEX idx_chart_key (`key``),
-    UNIQUE KEY unique_experiment_key (experiment_id, `key`)`,
+    INDEX idx_chart_key (`key`),
+    UNIQUE KEY unique_experiment_key (experiment_id, `key`),
     FOREIGN KEY (experiment_id) REFERENCES cloud_experiments(id) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
