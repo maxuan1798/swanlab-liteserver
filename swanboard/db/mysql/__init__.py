@@ -5,6 +5,7 @@ MySQL database module for cloud synchronization
 """
 
 from .models import *
+from .auth_models import *
 from .config import MySQLConfig
 from .connection import connect_cloud_db, is_cloud_db_connected, mysql_manager, MySQLConnectionManager
 
@@ -27,5 +28,14 @@ __all__ = [
     'CloudSource',
     'CloudDisplay',
     'CloudBaseModel',
-    'CLOUD_MODELS'
+    'CLOUD_MODELS',
+
+    # Auth Models
+    'Account',
+    'Tenant',
+    'TenantAccountJoin',
+    'AccountIntegrate',
+    'RefreshToken',
+    'AccountStatus',
+    'AUTH_MODELS',
 ]

@@ -55,6 +55,34 @@
     </div>
     <!-- fixeds -->
     <div class="flex items-center font-semibold gap-6">
+      <!-- User profile dropdown -->
+      <div v-if="authStore.isAuthenticated" class="flex items-center">
+        <SLMenu class="w-48" down>
+          <template #default="{ open }">
+            <div class="flex items-center gap-2 px-3 py-1.5 border rounded hover:border-primary-default cursor-pointer">
+              <div class="w-6 h-6 rounded-full bg-primary-default flex items-center justify-center text-white text-xs font-semibold">
+                {{ authStore.currentUser?.name?.charAt(0)?.toUpperCase() || 'U' }}
+              </div>
+              <span class="text-sm">{{ authStore.currentUser?.name }}</span>
+            </div>
+          </template>
+          <template #pop="{ close }">
+            <SLMenuItem @click="handleProfile(close)">
+              <div class="flex items-center gap-2 w-full">
+                <SLIcon icon="user" class="w-4 h-4" />
+                <span class="text-sm">Profile</span>
+              </div>
+            </SLMenuItem>
+            <SLMenuItem @click="handleLogout(close)">
+              <div class="flex items-center gap-2 w-full text-error-default">
+                <SLIcon icon="logout" class="w-4 h-4" />
+                <span class="text-sm">Logout</span>
+              </div>
+            </SLMenuItem>
+          </template>
+        </SLMenu>
+      </div>
+
       <!-- button: language switch -->
       <div class="flex items-center font-semibold">
         <button @click="switchLang()" class="switchLang relative w-9 h-9">
@@ -91,7 +119,7 @@ import SLMenuItem from '@swanlab-vue/components/menu/SLMenuItem.vue'
 import { getDefaultLang } from '@swanlab-vue/i18n'
 import { useI18n } from 'vue-i18n'
 import { t } from '@swanlab-vue/i18n'
-import { useWorkspaceStore } from '@swanlab-vue/store'
+import { useWorkspaceStore, useAuthStore } from '@swanlab-vue/store'
 import { useRouter } from 'vue-router'
 import http from '@swanlab-vue/api/http'
 
@@ -141,6 +169,9 @@ const goHome = () => {
   router.push('/')
 }
 
+// ---------------------------------- Authentication ----------------------------------
+const authStore = useAuthStore()
+
 // ---------------------------------- workspace 选择 ----------------------------------
 const workspaceStore = useWorkspaceStore()
 const workspaces = ref([])
@@ -188,6 +219,24 @@ const switchLang = () => {
   const temp = mainLangClass.value
   mainLangClass.value = secondLangClass.value
   secondLangClass.value = temp
+}
+
+// ---------------------------------- User Profile Handlers ----------------------------------
+const handleProfile = (close) => {
+  close()
+  // TODO: Navigate to profile page when implemented
+  console.log('Navigate to profile page')
+}
+
+const handleLogout = async (close) => {
+  close()
+  try {
+    await authStore.logout()
+    // Redirect to login page after logout
+    router.push('/login')
+  } catch (error) {
+    console.error('Logout failed:', error)
+  }
 }
 </script>
 

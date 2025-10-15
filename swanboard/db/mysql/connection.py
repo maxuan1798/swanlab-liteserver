@@ -13,6 +13,14 @@ from .models import cloud_db, CLOUD_MODELS
 from swanboard.utils import swanlog
 import logging
 
+# Import AUTH_MODELS for table creation
+try:
+    from .auth_models import AUTH_MODELS
+    _has_auth_models = True
+except ImportError:
+    AUTH_MODELS = []
+    _has_auth_models = False
+
 class MySQLConnectionManager:
     """MySQL连接管理器"""
 
@@ -111,8 +119,14 @@ class MySQLConnectionManager:
     def _create_tables(self):
         """创建数据库表结构"""
         try:
+            # Create cloud models tables
             self._db.create_tables(CLOUD_MODELS, safe=True)
             swanlog.debug("Cloud database tables created/verified")
+
+            # Create authentication models tables if available
+            if _has_auth_models and AUTH_MODELS:
+                self._db.create_tables(AUTH_MODELS, safe=True)
+                swanlog.debug("Authentication tables created/verified")
         except Exception as e:
             swanlog.error(f"Failed to create database tables: {e}")
             raise
@@ -186,17 +200,6 @@ class MySQLConnectionManager:
                 swanlog.error(f"Failed to connect to cloud database: {e}")
                 return False
 
-    def validate_api_key(self, authorization: Optional[str] = None) -> bool:
-        """
-        验证API密钥
-
-        Args:
-            authorization: Authorization header值
-
-        Returns:
-            bool: 验证成功返回True
-        """
-        return True
 
     def validate_workspace(self, workspace: str) -> bool:
         """

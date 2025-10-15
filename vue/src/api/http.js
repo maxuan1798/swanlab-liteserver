@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { useAuthStore } from '@swanlab-vue/store'
 
 // axios对象实例
 const http = axios.create({
@@ -11,6 +12,20 @@ const http = axios.create({
 http.interceptors.request.use(
   async (req) => {
     console.log('[request] ', req.method, req.url, req.data || req.params || '')
+
+    // Skip authentication for login and register endpoints
+    const isAuthEndpoint = req.url?.includes('/auth/') ||
+                          req.url?.includes('/login') ||
+                          req.url?.includes('/register')
+
+    if (!isAuthEndpoint) {
+      const authStore = useAuthStore()
+      const token = authStore.accessToken
+
+      if (token) {
+        req.headers.Authorization = `Bearer ${token}`
+      }
+    }
 
     return req
   },

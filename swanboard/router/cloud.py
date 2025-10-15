@@ -27,6 +27,7 @@ from ..controller.cloud import (
     get_project_experiments,
     get_workspaces
 )
+from ..dependencies.auth import validate_api_key_dependency
 from swanboard.cloud_api.cloud_service import CloudSyncManager
 from swanboard.utils import swanlog
 
@@ -130,23 +131,7 @@ _cloud_workspace = os.getenv('SWANLAB_WORKSPACE', 'default')
 _cloud_user = os.getenv('SWANLAB_CLOUD_USER', 'system')
 _manager = CloudSyncManager(workspace=_cloud_workspace, user=_cloud_user)
 
-# API key check dependency
-def _check_api_key(authorization: Optional[str] = Header(None)):
-    api_key = os.getenv('SWANLAB_API_KEY')
-    if not api_key:
-        # no API key configured on server -> no auth required
-        return True
-
-    if not authorization:
-        raise HTTPException(status_code=401, detail='Missing Authorization header')
-
-    if not authorization.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail='Invalid Authorization header')
-
-    token = authorization.split(' ', 1)[1]
-    if token != api_key:
-        raise HTTPException(status_code=403, detail='Invalid API key')
-    return True
+# API key check dependency (使用集中化的依赖)
 
 
 # ================================== 项目相关路由 ==================================
@@ -163,8 +148,7 @@ def _check_api_key(authorization: Optional[str] = Header(None)):
 )
 async def create_or_sync_project(
     project_data: ProjectSyncRequest,
-    request: Request,
-    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
+    request: Request
 ):
     """
     ## 同步项目到云端
@@ -184,7 +168,7 @@ async def create_or_sync_project(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_project(request, authorization)
+    return await sync_project(request)
 
 
 # ================================== 实验相关路由 ==================================
@@ -201,8 +185,7 @@ async def create_or_sync_project(
 )
 async def create_or_sync_experiment(
     experiment_data: ExperimentSyncRequest,
-    request: Request,
-    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
+    request: Request
 ):
     """
     ## 同步实验到云端
@@ -222,7 +205,7 @@ async def create_or_sync_experiment(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_experiment(request, authorization)
+    return await sync_experiment(request)
 
 
 @router.put(
@@ -238,8 +221,7 @@ async def create_or_sync_experiment(
 async def update_experiment_status_route(
     experiment_id: str,
     status_data: ExperimentStatusRequest,
-    request: Request,
-    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
+    request: Request
 ):
     """
     ## 更新实验状态
@@ -259,7 +241,7 @@ async def update_experiment_status_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await update_experiment_status(experiment_id, request, authorization)
+    return await update_experiment_status(experiment_id, request)
 
 
 # ================================== 运行时信息相关路由 ==================================
@@ -277,8 +259,7 @@ async def update_experiment_status_route(
 )
 async def sync_runtime_info_route(
     runtime_data: RuntimeInfoSyncRequest,
-    request: Request,
-    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
+    request: Request
 ):
     """
     ## 同步运行时信息到云端
@@ -299,7 +280,7 @@ async def sync_runtime_info_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_runtime_info(request, authorization)
+    return await sync_runtime_info(request)
 
 
 @router.get(
@@ -312,8 +293,7 @@ async def sync_runtime_info_route(
     }
 )
 async def get_runtime_info_route(
-    experiment_id: str,
-    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
+    experiment_id: str
 ):
     """
     ## 获取实验运行时信息
@@ -334,7 +314,7 @@ async def get_runtime_info_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await get_runtime_info(experiment_id, authorization)
+    return await get_runtime_info(experiment_id)
 
 
 # ================================== 列/指标相关路由 ==================================
@@ -350,8 +330,7 @@ async def get_runtime_info_route(
 )
 async def create_or_sync_column(
     column_data: ColumnSyncRequest,
-    request: Request,
-    authorization: Optional[str] = Header(None, description="Bearer token for authentication")
+    request: Request
 ):
     """
     ## 同步指标列到云端
@@ -372,28 +351,25 @@ async def create_or_sync_column(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_column(request, authorization)
+    return await sync_column(request)
 
 
 # ================================== 查询相关路由 ==================================
 
 @router.get("/workspaces")
-async def list_workspaces(
-    authorization: Optional[str] = Header(None)
-):
+async def list_workspaces():
     """
     获取所有工作空间列表
 
     Returns:
         工作空间列表
     """
-    return get_workspaces(authorization)
+    return get_workspaces()
 
 
 @router.get("/workspaces/{workspace}/projects")
 async def list_workspace_projects(
-    workspace: str,
-    authorization: Optional[str] = Header(None)
+    workspace: str
 ):
     """
     获取工作空间下的所有项目
@@ -401,13 +377,12 @@ async def list_workspace_projects(
     Returns:
         项目列表
     """
-    return get_workspace_projects(workspace, authorization)
+    return get_workspace_projects(workspace)
 
 
 @router.get("/projects/{project_id}/experiments")
 async def list_project_experiments(
-    project_id: str,
-    authorization: Optional[str] = Header(None)
+    project_id: str
 ):
     """
     获取项目下的所有实验
@@ -415,7 +390,7 @@ async def list_project_experiments(
     Returns:
         实验列表
     """
-    return get_project_experiments(project_id, authorization)
+    return get_project_experiments(project_id)
 
 
 # ================================== 健康检查 ==================================
@@ -547,10 +522,6 @@ _cloud_workspace = os.getenv('SWANLAB_WORKSPACE', 'default')
 _cloud_user = os.getenv('SWANLAB_CLOUD_USER', 'system')
 _manager = CloudSyncManager(workspace=_cloud_workspace, user=_cloud_user)
 
-# API key check dependency
-def _check_api_key(authorization: Optional[str] = Header(None)):
-    return True
-
 @router.get(
     path='/minio/config',
     summary="获取MinIO配置",
@@ -567,7 +538,10 @@ async def minio_config():
 
 
 @router.post('/minio/upload')
-async def minio_upload(request: Request, authorized: bool = Depends(_check_api_key)):
+async def minio_upload(
+    request: Request,
+    account = Depends(validate_api_key_dependency)
+):
     """Upload a file (multipart) and proxy it to server MinIO implementation.
 
     Expects multipart form with fields:
@@ -600,7 +574,10 @@ async def minio_upload(request: Request, authorized: bool = Depends(_check_api_k
 
 
 @router.get('/minio/download')
-async def minio_download(object_key: str = Query(...), authorized: bool = Depends(_check_api_key)):
+async def minio_download(
+    object_key: str = Query(...),
+    account = Depends(validate_api_key_dependency)
+):
     """Download object bytes proxied from server MinIO. Returns raw bytes."""
     try:
         bio = _manager.download_media_bytes(object_key)
@@ -616,7 +593,11 @@ async def minio_download(object_key: str = Query(...), authorized: bool = Depend
 
 
 @router.get('/minio/presign')
-async def minio_presign(object_key: str = Query(...), expiration: int = Query(3600), authorized: bool = Depends(_check_api_key)):
+async def minio_presign(
+    object_key: str = Query(...),
+    expiration: int = Query(3600),
+    account = Depends(validate_api_key_dependency)
+):
     """Return a presigned URL for the given object (if supported by server).
 
     Response: {"code":0, "message":"success", "data": {"url": "..."}}
@@ -634,7 +615,10 @@ async def minio_presign(object_key: str = Query(...), expiration: int = Query(36
 
 
 @router.delete('/minio/delete')
-async def minio_delete(object_key: str = Query(...), authorized: bool = Depends(_check_api_key)):
+async def minio_delete(
+    object_key: str = Query(...),
+    account = Depends(validate_api_key_dependency)
+):
     """Delete object from server MinIO.
 
     Response: {"code":0, "message":"success", "data": {"deleted": true}}

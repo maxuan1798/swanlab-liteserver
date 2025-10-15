@@ -11,11 +11,14 @@
 
 import os
 from typing import Dict, Any, Optional
-from fastapi import Request, HTTPException, Header
+from fastapi import Request, HTTPException, Header, Depends
 
 # 使用CloudSyncManager处理业务逻辑
 from ..cloud_api import CloudSyncManager
 from ..repositories import connection_manager
+
+# 认证依赖
+from ..dependencies.auth import validate_api_key_dependency
 
 # 响应模块
 from ..module.resp import (
@@ -29,7 +32,7 @@ from ..utils import swanlog
 
 # ================================== 项目相关API ==================================
 
-async def sync_project(request: Request, authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+async def sync_project(request: Request, account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
     """
     同步项目到云端数据库
 
@@ -45,10 +48,6 @@ async def sync_project(request: Request, authorization: Optional[str] = Header(N
     Returns:
         项目ID和相关信息
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         body = await request.json()
 
@@ -64,6 +63,7 @@ async def sync_project(request: Request, authorization: Optional[str] = Header(N
 
         swanlog.info(f"project name: {project_name}")
         swanlog.info(f"workspace: {workspace}")
+        swanlog.info(f"authenticated user: {account.email}")
 
         # 验证工作空间
         if not connection_manager.validate_workspace(workspace):
@@ -74,7 +74,7 @@ async def sync_project(request: Request, authorization: Optional[str] = Header(N
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=workspace,
-            user=os.getenv('SWANLAB_USER', 'unknown')
+            user=account.email  # 使用认证用户的邮箱作为用户标识
         )
 
         # 使用CloudSyncManager同步项目
@@ -98,7 +98,8 @@ async def sync_project(request: Request, authorization: Optional[str] = Header(N
             "name": project.name,
             "description": project.description,
             "workspace": workspace,
-            "existed": True  # CloudSyncManager会处理存在性逻辑
+            "existed": True,  # CloudSyncManager会处理存在性逻辑
+            "created_by": account.email
         })
 
     except Exception as e:
@@ -109,7 +110,7 @@ async def sync_project(request: Request, authorization: Optional[str] = Header(N
 
 # ================================== 实验相关API ==================================
 
-async def sync_experiment(request: Request, authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+async def sync_experiment(request: Request, account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
     """
     同步实验到云端数据库
 
@@ -128,10 +129,6 @@ async def sync_experiment(request: Request, authorization: Optional[str] = Heade
     Returns:
         实验ID和相关信息
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         body = await request.json()
 
@@ -147,6 +144,8 @@ async def sync_experiment(request: Request, authorization: Optional[str] = Heade
         colors = body.get('colors', [])
         workspace = body['workspace']
 
+        swanlog.info(f"authenticated user: {account.email}")
+
         # 验证工作空间
         if not connection_manager.validate_workspace(workspace):
             return UNAUTHORIZED_401(f"Workspace '{workspace}' not allowed")
@@ -159,7 +158,7 @@ async def sync_experiment(request: Request, authorization: Optional[str] = Heade
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=workspace,
-            user=os.getenv('SWANLAB_USER', 'unknown')
+            user=account.email  # 使用认证用户的邮箱作为用户标识
         )
 
         # 首先需要有一个项目上下文，如果提供了project_id，先设置项目
@@ -196,7 +195,8 @@ async def sync_experiment(request: Request, authorization: Optional[str] = Heade
             "name": experiment.name,
             "description": experiment.description,
             "workspace": workspace,
-            "existed": True  # CloudSyncManager会处理存在性逻辑
+            "existed": True,  # CloudSyncManager会处理存在性逻辑
+            "created_by": account.email
         })
 
     except Exception as e:
@@ -206,7 +206,7 @@ async def sync_experiment(request: Request, authorization: Optional[str] = Heade
 
 # ================================== 列/指标相关API ==================================
 
-async def sync_column(request: Request, authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+async def sync_column(request: Request, account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
     """
     同步列/指标到云端数据库
 
@@ -230,10 +230,6 @@ async def sync_column(request: Request, authorization: Optional[str] = Header(No
     Returns:
         列ID和相关信息
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         body = await request.json()
 
@@ -294,7 +290,7 @@ async def sync_column(request: Request, authorization: Optional[str] = Header(No
 async def update_experiment_status(
     experiment_id: str,
     request: Request,
-    authorization: Optional[str] = Header(None)
+    account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     更新实验状态
@@ -309,10 +305,6 @@ async def update_experiment_status(
     Returns:
         更新结果
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         body = await request.json()
 
@@ -355,7 +347,7 @@ async def update_experiment_status(
 
 # ================================== 运行时信息API ==================================
 
-async def sync_runtime_info(request: Request, authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+async def sync_runtime_info(request: Request, account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
     """
     同步实验运行时信息到云端数据库
 
@@ -373,10 +365,6 @@ async def sync_runtime_info(request: Request, authorization: Optional[str] = Hea
     Returns:
         运行时信息ID和相关信息
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         body = await request.json()
         print("sync_runtime_info body:", body)
@@ -407,7 +395,7 @@ async def sync_runtime_info(request: Request, authorization: Optional[str] = Hea
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=project.workspace,
-            user=os.getenv('SWANLAB_USER', 'unknown')
+            user=account.email  # 使用认证用户的邮箱作为用户标识
         )
 
         # 设置当前实验上下文
@@ -446,7 +434,7 @@ async def sync_runtime_info(request: Request, authorization: Optional[str] = Hea
 
 async def get_runtime_info(
     experiment_id: str,
-    authorization: Optional[str] = Header(None)
+    account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验运行时信息
@@ -456,10 +444,6 @@ async def get_runtime_info(
     Returns:
         运行时信息详情
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         # 验证实验存在
         from ..repositories import experiment_repository
@@ -476,7 +460,7 @@ async def get_runtime_info(
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=project.workspace,
-            user=os.getenv('SWANLAB_USER', 'unknown')
+            user=account.email  # 使用认证用户的邮箱作为用户标识
         )
 
         # 获取运行时信息
@@ -499,8 +483,7 @@ async def get_runtime_info(
 # ================================== 查询API ==================================
 
 def get_workspace_projects(
-    workspace: str,
-    authorization: Optional[str] = Header(None)
+    workspace: str
 ) -> Dict[str, Any]:
     """
     获取工作空间下的所有项目
@@ -510,10 +493,6 @@ def get_workspace_projects(
     Returns:
         项目列表
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         # 验证工作空间
         if not connection_manager.validate_workspace(workspace):
@@ -535,8 +514,7 @@ def get_workspace_projects(
 
 
 def get_project_experiments(
-    project_id: str,
-    authorization: Optional[str] = Header(None)
+    project_id: str
 ) -> Dict[str, Any]:
     """
     获取项目下的所有实验
@@ -546,10 +524,6 @@ def get_project_experiments(
     Returns:
         实验列表
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         # 验证项目存在
         from ..repositories import project_repository, experiment_repository
@@ -572,9 +546,7 @@ def get_project_experiments(
         return DATA_ERROR_500(f"Failed to get project experiments: {e}")
 
 
-def get_workspaces(
-    authorization: Optional[str] = Header(None)
-) -> Dict[str, Any]:
+def get_workspaces() -> Dict[str, Any]:
     """
     获取所有工作空间列表
 
@@ -583,10 +555,6 @@ def get_workspaces(
     Returns:
         工作空间列表
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
     try:
         # 使用 NamespaceRepository 获取所有工作空间
         from ..repositories import namespace_repository

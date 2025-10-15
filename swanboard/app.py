@@ -26,6 +26,9 @@ from .settings import ASSETS
 # 加载 .env 文件
 load_dotenv()
 
+# 导入数据库连接管理器
+from .db.mysql import mysql_manager, MySQLConfig
+
 # 服务全局对象 - 配置OpenAPI文档
 app = FastAPI(
     title="SwanLab-Server API",
@@ -73,6 +76,48 @@ uvicorn_error = logging.getLogger("uvicorn.error")
 uvicorn_error.disabled = True
 uvicorn_access = logging.getLogger("uvicorn.access")
 uvicorn_access.disabled = True
+
+
+# ---------------------------------- 应用生命周期事件 ----------------------------------
+
+
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时的初始化"""
+    # 初始化数据库连接（如果启用云端同步）
+    if os.getenv("SWANLAB_CLOUD_SYNC", "false").lower() in ("true", "1", "yes"):
+        try:
+            # 尝试连接MySQL数据库
+            config = MySQLConfig.from_env()
+            connected = mysql_manager.connect(config)
+            if connected:
+                print("✓ Database connected successfully")
+            else:
+                print("⚠ Warning: Database connection failed, authentication features may not work")
+        except Exception as e:
+            print(f"⚠ Warning: Failed to initialize database: {e}")
+            print("  Authentication features may not work properly")
+
+    # 初始化Redis（用于认证令牌存储）
+    try:
+        from .services.auth_service import AuthService
+        from .config.auth_config import AuthConfig
+        AuthService.initialize_redis(AuthConfig.REDIS_URL)
+        print("✓ Redis initialized for authentication")
+    except Exception as e:
+        print(f"⚠ Warning: Redis initialization failed: {e}")
+        print("  Token refresh may use database fallback")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭时的清理"""
+    # 断开数据库连接
+    try:
+        mysql_manager.disconnect()
+        print("✓ Database connection closed")
+    except Exception as e:
+        print(f"⚠ Warning: Error closing database: {e}")
 
 
 # ---------------------------------- 在此处注册中间件 ----------------------------------
@@ -127,11 +172,17 @@ from .router.media import router as media
 # 云端API路由，支持EnhancedSwanBoardCallback的HTTP通信
 from .router.cloud import router as cloud
 
+# 认证相关路由
+from .router.auth import router as auth
+from .router.oauth import router as oauth
+
 # 使用配置列表，统一导入
 prefix = "/api/v1"
-app.include_router(project, prefix=prefix + "/project")
-app.include_router(experiment, prefix=prefix + "/experiment")
-app.include_router(media, prefix=prefix + "/media")
-app.include_router(namespace, prefix=prefix + "/namespace")
-app.include_router(chart, prefix=prefix + "/chart")
-app.include_router(cloud, prefix=prefix + "/cloud")
+app.include_router(project, prefix=prefix + "/project", tags=["Projects"])
+app.include_router(experiment, prefix=prefix + "/experiment", tags=["Experiments"])
+app.include_router(media, prefix=prefix + "/media", tags=["Media"])
+app.include_router(namespace, prefix=prefix + "/namespace", tags=["Namespaces"])
+app.include_router(chart, prefix=prefix + "/chart", tags=["Charts"])
+app.include_router(cloud, prefix=prefix + "/cloud", tags=["Cloud Sync"])
+app.include_router(auth, prefix=prefix + "/auth", tags=["Authentication"])
+app.include_router(oauth, prefix=prefix + "/oauth", tags=["OAuth"])

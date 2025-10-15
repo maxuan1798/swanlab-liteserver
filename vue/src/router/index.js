@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@swanlab-vue/store'
 
 const routes = [
   // 项目列表路由
@@ -107,6 +108,22 @@ const router = createRouter({
   history: createWebHistory(),
   base: '/',
   routes
+})
+
+// Route guards
+router.beforeEach((to, from, next) => {
+  const authStore = useAuthStore()
+
+  // Check if the route requires authentication
+  const requiresAuth = to.name !== 'help' && to.name !== 'not-found'
+
+  if (requiresAuth && !authStore.isAuthenticated) {
+    // Stay on current route but show auth views in MainLayout
+    next()
+  } else {
+    // Continue to the requested route
+    next()
+  }
 })
 
 export default router

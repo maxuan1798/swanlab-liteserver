@@ -12,6 +12,11 @@ app.use(pinia)
 app.use(i18n)
 app.use(router)
 
+// Initialize authentication store
+import { useAuthStore } from '@swanlab-vue/store'
+const authStore = useAuthStore()
+authStore.initialize()
+
 // ---------------------------------- 设置指令 ----------------------------------
 // v-tippy
 import { directive } from 'vue-tippy'

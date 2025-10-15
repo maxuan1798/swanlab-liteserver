@@ -13,13 +13,17 @@ import os
 import ujson
 import yaml
 from typing import Dict, Any, Optional, List
-from fastapi import Request, HTTPException, Header
+from fastapi import Request, HTTPException, Depends
 
 # 使用CloudSyncManager和repositories处理业务逻辑
 from ..cloud_api import CloudSyncManager
 from ..repositories import (
     connection_manager, project_repository, experiment_repository, chart_repository, clickhouse_repository
 )
+
+# 认证依赖
+from ..dependencies.auth import validate_api_key_dependency
+from ..db.mysql import Account
 
 from ..db.mysql import (
     CloudProject as Project,
@@ -94,7 +98,7 @@ RUNNING_STATUS = Experiment.RUNNING_STATUS
 
 def get_experiment_info(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验信息
@@ -104,9 +108,7 @@ def get_experiment_info(
     Returns:
         ���验信息和相关数据
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 获取实验信息
@@ -178,7 +180,7 @@ def get_experiment_info(
 def get_tag_data(
     experiment_id: int,
     tag: str,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取标签数据（从 ClickHouse 获取）
@@ -188,9 +190,7 @@ def get_tag_data(
     Returns:
         标签相关的数据信息
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 验证实验存在
@@ -261,7 +261,7 @@ def get_tag_data(
 
 def get_experiment_status(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验状态以及实验图表配���，用于实时更新实验状态
@@ -271,9 +271,7 @@ def get_experiment_status(
     Returns:
         实验状态和图表配置信息
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 获取实验信息
@@ -301,7 +299,7 @@ def get_experiment_status(
 
 def get_experiment_summary(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验的总结数据——每个标签的最新数据
@@ -311,9 +309,7 @@ def get_experiment_summary(
     Returns:
         实验总结信息
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 验证实验存在
@@ -342,7 +338,7 @@ def get_experiment_summary(
 
 def get_experiment_charts(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获���实验图表信息
@@ -352,9 +348,7 @@ def get_experiment_charts(
     Returns:
         实验图表数据
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 验证实验存在
@@ -377,7 +371,7 @@ def get_experiment_charts(
 
 def get_recent_logs(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验最近日志（从 ClickHouse 获取）
@@ -387,9 +381,7 @@ def get_recent_logs(
     Returns:
         实验日志信息
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 验证实验存在
@@ -427,7 +419,7 @@ def get_recent_logs(
 
 def get_experiment_requirements(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验依赖（优先从云端运行时信息获取）
@@ -437,9 +429,7 @@ def get_experiment_requirements(
     Returns:
         实验依赖信息
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 验证实验存在
@@ -521,14 +511,14 @@ def get_experiment_requirements(
 # 为了兼容性，添加拼写错误的函数名
 def get_experimet_charts(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验图表信息 (兼容拼写错误的函数名)
 
     这是 get_experiment_charts 的别名
     """
-    return get_experiment_charts(experiment_id, authorization)
+    return get_experiment_charts(experiment_id, _)
 
 
 # ================================== 实验信息修改 ==================================
@@ -536,7 +526,7 @@ def get_experimet_charts(
 def update_experiment_info(
     experiment_id: int,
     request: Request,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     修改实验信息
@@ -552,9 +542,7 @@ def update_experiment_info(
     Returns:
         更新后的实验信息
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         body = request.json()
@@ -592,7 +580,7 @@ def update_experiment_info(
 def update_experiment_status(
     experiment_id: int,
     request: Request,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     更新实验状态
@@ -608,9 +596,7 @@ def update_experiment_status(
     Returns:
         更新结果
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         body = request.json()
@@ -655,7 +641,7 @@ def update_experiment_status(
 
 def delete_experiment(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     删除实验
@@ -665,9 +651,7 @@ def delete_experiment(
     Returns:
         删除结果
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 验证实验存在
@@ -703,7 +687,7 @@ def delete_experiment(
 
 def stop_experiment(
     experiment_id: int,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     停止实验
@@ -713,9 +697,7 @@ def stop_experiment(
     Returns:
         停止实验后的状态信息
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 验证实验存在
@@ -748,7 +730,7 @@ def stop_experiment(
 def change_experiment_visibility(
     experiment_id: int,
     show: bool,
-    authorization: Optional[str] = None
+    _: None = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     修改实验是否可见
@@ -763,9 +745,7 @@ def change_experiment_visibility(
     Returns:
         当前实验信息
     """
-    # 验证API密钥（云端版本，可选验证以保持兼容性）
-    if authorization is not None and not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    # JWT认证已通过依赖注入处理
 
     try:
         # 验证实验存在

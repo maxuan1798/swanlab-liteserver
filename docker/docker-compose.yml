@@ -149,6 +149,12 @@ services:
       SWANLAB_LOG_DIR: /app/logs
       SWANLAB_DATA_DIR: /app/data
 
+      # Redis配置（可选）
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
       # Python配置
       PYTHONPATH: /app
       PYTHONUNBUFFERED: 1

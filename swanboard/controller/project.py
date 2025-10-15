@@ -11,13 +11,17 @@
 
 import os
 from typing import Dict, Any, Optional, List
-from fastapi import Request, HTTPException, Header
+from fastapi import Request, HTTPException, Depends
 
 # 使用CloudSyncManager和repositories处理业务逻辑
 from ..cloud_api import CloudSyncManager
 from ..repositories import (
     connection_manager, project_repository, experiment_repository, chart_repository
 )
+
+# 认证依赖
+from ..dependencies.auth import validate_api_key_dependency
+from ..db.mysql import Account
 
 from ..db.mysql import (
     CloudProject as Project,
@@ -43,7 +47,7 @@ RUNNING_STATUS = Experiment.RUNNING_STATUS
 
 def get_project_info(
     project_id: int = DEFAULT_PROJECT_ID,
-    authorization: Optional[str] = Header(None)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取项目信息
@@ -53,9 +57,6 @@ def get_project_info(
     Returns:
         项目信息和实验列表
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         print("get_project_info", project_id)
@@ -94,7 +95,7 @@ def get_project_info(
 
 def get_project_summary(
     project_id: int = DEFAULT_PROJECT_ID,
-    authorization: Optional[str] = Header(None)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取项目下所有实验的总结信息
@@ -104,9 +105,6 @@ def get_project_summary(
     Returns:
         项目总结信息
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         # 验证项目存在
@@ -160,7 +158,7 @@ def get_project_summary(
 def update_project_info(
     project_id: int,
     request: Request,
-    authorization: Optional[str] = Header(None)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     修改项目信息
@@ -176,9 +174,6 @@ def update_project_info(
     Returns:
         更新后的项目信息
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         body = request.json()
@@ -217,7 +212,7 @@ def update_project_info(
 
 def delete_project(
     project_id: int,
-    authorization: Optional[str] = Header(None)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     删除项目
@@ -227,9 +222,6 @@ def delete_project(
     Returns:
         删除结果
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         # 验证项目存在
@@ -270,7 +262,7 @@ def delete_project(
 
 def get_project_charts(
     project_id: int,
-    authorization: Optional[str] = Header(None)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取多实验对比图表数据
@@ -280,9 +272,6 @@ def get_project_charts(
     Returns:
         项目图表数据
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         # 验证项目存在
@@ -342,7 +331,7 @@ def get_project_charts(
 
 def get_workspace_projects(
     workspace: str,
-    authorization: Optional[str] = Header(None)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取工作空间下的所有项目
@@ -352,9 +341,6 @@ def get_workspace_projects(
     Returns:
         项目列表
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         # 验证工作空间
@@ -379,7 +365,7 @@ def get_workspace_projects(
 
 def create_project(
     request: Request,
-    authorization: Optional[str] = Header(None)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     创建新项目
@@ -396,9 +382,6 @@ def create_project(
     Returns:
         创建的项目信息
     """
-    # 验证API密钥
-    if not connection_manager.validate_api_key(authorization):
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         body = request.json()
@@ -422,7 +405,7 @@ def create_project(
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=workspace,
-            user=os.getenv('SWANLAB_USER', 'unknown')
+            user=account.email  # 使用认证用户的邮箱作为用户标识
         )
 
         # 使用CloudSyncManager创建项目

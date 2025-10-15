@@ -1,29 +1,43 @@
 <template>
   <section class="w-screen h-screen overflow-x-clip">
-    <!-- 侧边栏关闭/开启按钮 -->
-    <button class="close-button" ref="cbRef" @click="handleClose" v-if="showSideBar">
-      <SLIcon icon="sidebar" class="w-full h-full" />
-    </button>
     <!-- 顶部header -->
-    <header class="h-14 w-full">
+    <header class="h-14 w-full" v-if="authStore.isAuthenticated">
       <HeaderBar :version="version" />
     </header>
-    <!-- 下半部分主要内容，增加一个relative-container的原因是解决按钮在滑动时的隐藏问题 -->
-    <main class="main-container">
-      <!-- 遮罩，淡入淡出 -->
-      <transition name="fade" v-if="showSideBar">
-        <div class="md:hidden sidebar-overlay" v-if="isSideBarShow" @click="handleClose"></div>
-      </transition>
-      <!-- 侧边栏 -->
-      <div class="sidebar-container bg-default" ref="sidebarRef" v-if="showSideBar">
-        <!-- 侧边栏规定宽度 -->
-        <div class="sidebar-content">
-          <SideBar />
-        </div>
+
+    <!-- 主要内容区域 -->
+    <main class="main-content-area">
+      <!-- 未认证状态：显示登录/注册页面 -->
+      <div v-if="!authStore.isAuthenticated" class="auth-content">
+        <LoginView v-if="currentAuthView === 'login'" @switch-to-register="switchToRegister" />
+        <RegisterView v-else @switch-to-login="switchToLogin" />
       </div>
-      <!-- 右侧主要内容 -->
-      <div class="main-content border-l" ref="containerRef">
-        <slot></slot>
+
+      <!-- 已认证状态：显示主应用布局 -->
+      <div v-else class="app-content">
+        <!-- 侧边栏关闭/开启按钮 -->
+        <button class="close-button" ref="cbRef" @click="handleClose" v-if="showSideBar">
+          <SLIcon icon="sidebar" class="w-full h-full" />
+        </button>
+
+        <!-- 下半部分主要内容，增加一个relative-container的原因是解决按钮在滑动时的隐藏问题 -->
+        <div class="main-container">
+          <!-- 遮罩，淡入淡出 -->
+          <transition name="fade" v-if="showSideBar">
+            <div class="md:hidden sidebar-overlay" v-if="isSideBarShow" @click="handleClose"></div>
+          </transition>
+          <!-- 侧边栏 -->
+          <div class="sidebar-container bg-default" ref="sidebarRef" v-if="showSideBar">
+            <!-- 侧边栏规定宽度 -->
+            <div class="sidebar-content">
+              <SideBar />
+            </div>
+          </div>
+          <!-- 右侧主要内容 -->
+          <div class="main-content border-l" ref="containerRef">
+            <slot></slot>
+          </div>
+        </div>
       </div>
     </main>
   </section>
@@ -36,7 +50,10 @@
 import { ref, watch, onMounted, provide, computed } from 'vue'
 import HeaderBar from './components/HeaderBar.vue'
 import SideBar from './components/SideBar.vue'
+import LoginView from '@swanlab-vue/views/auth/LoginView.vue'
+import RegisterView from '@swanlab-vue/views/auth/RegisterView.vue'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '@swanlab-vue/store'
 const props = defineProps({
   version: {
     type: String,
@@ -47,6 +64,18 @@ const props = defineProps({
     default: true
   }
 })
+
+// ---------------------------------- 认证状态管理 ----------------------------------
+const authStore = useAuthStore()
+const currentAuthView = ref('login')
+
+const switchToRegister = () => {
+  currentAuthView.value = 'register'
+}
+
+const switchToLogin = () => {
+  currentAuthView.value = 'login'
+}
 
 // ---------------------------------- 开启/关闭sidebar ----------------------------------
 
