@@ -498,7 +498,7 @@ async def get_runtime_info(
 
 # ================================== 查询API ==================================
 
-async def get_workspace_projects(
+def get_workspace_projects(
     workspace: str,
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
@@ -534,7 +534,7 @@ async def get_workspace_projects(
         return DATA_ERROR_500(f"Failed to get workspace projects: {e}")
 
 
-async def get_project_experiments(
+def get_project_experiments(
     project_id: str,
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
@@ -572,7 +572,7 @@ async def get_project_experiments(
         return DATA_ERROR_500(f"Failed to get project experiments: {e}")
 
 
-async def get_workspaces(
+def get_workspaces(
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
     """

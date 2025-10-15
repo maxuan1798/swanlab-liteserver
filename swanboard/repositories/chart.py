@@ -350,6 +350,50 @@ class NamespaceRepository(BaseRepository[CloudNamespace]):
             swanlog.error(f"Failed to get all workspaces: {e}")
             return []
 
+    def get_experiment_namespaces(self, experiment_id: int) -> List[Dict[str, Any]]:
+        """
+        获取实验相关的命名空间
+
+        Args:
+            experiment_id: 实验ID
+
+        Returns:
+            List[Dict]: 命名空间列表
+        """
+        if not self.ensure_connection():
+            return []
+
+        try:
+            from ..db.mysql.models import CloudDisplay, CloudChart
+
+            # 通过 Display 表找到实验相关的命名空间
+            # CloudChart -> CloudDisplay -> CloudNamespace
+            namespaces_query = (
+                CloudNamespace
+                .select()
+                .join(CloudDisplay)
+                .join(CloudChart)
+                .where(CloudChart.experiment == experiment_id)
+                .distinct()
+            )
+
+            namespace_list = []
+            for ns in namespaces_query:
+                print("Namespace:", ns.name)
+                namespace_list.append({
+                    'id': ns.id,
+                    'name': ns.name,
+                    'sort_order': ns.sort_order,
+                    'opened': ns.opened,
+                    'created_at': ns.created_at.isoformat() if ns.created_at else None
+                })
+
+            return namespace_list
+
+        except Exception as e:
+            swanlog.error(f"Failed to get experiment namespaces: {e}")
+            return []
+
 
 class TagRepository(BaseRepository[CloudTag]):
     """标签仓库类"""

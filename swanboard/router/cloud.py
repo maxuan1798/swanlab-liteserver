@@ -387,7 +387,7 @@ async def list_workspaces(
     Returns:
         工作空间列表
     """
-    return await get_workspaces(authorization)
+    return get_workspaces(authorization)
 
 
 @router.get("/workspaces/{workspace}/projects")
@@ -401,7 +401,7 @@ async def list_workspace_projects(
     Returns:
         项目列表
     """
-    return await get_workspace_projects(workspace, authorization)
+    return get_workspace_projects(workspace, authorization)
 
 
 @router.get("/projects/{project_id}/experiments")
@@ -415,7 +415,7 @@ async def list_project_experiments(
     Returns:
         实验列表
     """
-    return await get_project_experiments(project_id, authorization)
+    return get_project_experiments(project_id, authorization)
 
 
 # ================================== 健康检查 ==================================

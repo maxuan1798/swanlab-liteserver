@@ -84,10 +84,10 @@ async def _(project_id: int = None):
 
 
 @router.get("/charts")
-async def _(project_id: int = DEFAULT_PROJECT_ID):
+def _(project_id: int = DEFAULT_PROJECT_ID):
     """获取多实验对比图表数据,并且考虑往期版本兼容性
     1. 如果当前项目的chart字段为0，先生成多实验对比数据，跳转步骤2
     2. 依据规则获取所有实验的图表数据
     """
 
-    return await get_project_charts(project_id)
+    return get_project_charts(project_id)

@@ -306,10 +306,11 @@ def get_project_charts(
                 # 添加实验信息到图表
                 chart["experiment"] = experiment
                 all_charts.append(chart)
-
+            print("Got charts for experiment", exp_id, len(exp_charts))
             # 获取实验的命名空间
             from ..repositories import namespace_repository
             exp_namespaces = namespace_repository.get_experiment_namespaces(exp_id)
+            print("Got namespaces for experiment", exp_namespaces)
             for namespace in exp_namespaces:
                 namespace["experiment"] = experiment
                 all_namespaces.append(namespace)
@@ -321,7 +322,11 @@ def get_project_charts(
             if key not in grouped_charts:
                 grouped_charts[key] = []
             grouped_charts[key].append(chart)
-
+        print("Got charts for all experiments", {
+            "charts": list(grouped_charts.values()),
+            "namespaces": all_namespaces,
+            "experiments": experiments
+        })
         return SUCCESS_200({
             "charts": list(grouped_charts.values()),
             "namespaces": all_namespaces,
@@ -335,7 +340,7 @@ def get_project_charts(
 
 # ================================== 工作空间项目列表 ==================================
 
-async def get_workspace_projects(
+def get_workspace_projects(
     workspace: str,
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
