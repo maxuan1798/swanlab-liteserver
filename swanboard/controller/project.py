@@ -19,6 +19,20 @@ from ..repositories import (
     connection_manager, project_repository, experiment_repository, chart_repository
 )
 
+# 图表相关函数
+from ..controller.utils.charts import get_proj_charts
+
+# 兼容性函数 - 多实验图表数据转换
+def transform_to_multi_exp_charts(project_id: int):
+    """
+    兼容性函数：将单实验图表转换为多实验对比图表数据
+
+    此函数用于兼容旧版本中没有多实验对比数据的情况。
+    在新版本中，此功能已集成到 get_proj_charts 中，
+    因此这里只是一个空实现用于保持接口兼容性。
+    """
+    pass
+
 # 认证依赖
 from ..dependencies.auth import validate_api_key_dependency
 from ..db.mysql import Account
@@ -261,69 +275,61 @@ def delete_project(
 # ================================== 项目图表 ==================================
 
 def get_project_charts(
-    project_id: int,
-    account: Account = Depends(validate_api_key_dependency)
-) -> Dict[str, Any]:
-    """
-    获取多实验对比图表数据
-
-    GET /api/v1/projects/{project_id}/charts
-
-    Returns:
-        项目图表数据
+    project_id: int = DEFAULT_PROJECT_ID
+) -> dict:
+    """获取多实验对比图表数据,并且考虑往期版本兼容性
+    1. 如果当前项目的chart字段为0，先生成多实验对比数据，跳转步骤2
+    2. 依据规则获取所有实验的图表数据
     """
 
     try:
-        # 验证项目存在
-        project = project_repository.get_by_id(project_id)
-        if not project:
-            return NOT_FOUND_404(f"Project with id {project_id} not found")
+        # COMPAT 兼容以前没有多实验对比数据的情况
+        try:
+            transform_to_multi_exp_charts(project_id)
+        except IndexError:  # 已经有多实验对比数据
+            pass
 
-        # 获取项目下所有实验
-        experiments = experiment_repository.get_project_experiments(project_id)
+        charts, namespaces = get_proj_charts(project_id)
 
-        # 获取所有图表数据
-        all_charts = []
-        all_namespaces = []
+        # 确保返回的数据是可序列化的
+        serializable_charts = []
+        for chart in charts:
+            if hasattr(chart, '__dict__'):
+                # 如果是对象，转换为字典
+                serializable_chart = {}
+                for key, value in chart.__dict__.items():
+                    if not key.startswith('_'):
+                        serializable_chart[key] = value
+                serializable_charts.append(serializable_chart)
+            elif isinstance(chart, dict):
+                serializable_charts.append(chart)
+            else:
+                # 其他类型直接添加
+                serializable_charts.append(chart)
 
-        for experiment in experiments:
-            exp_id = experiment["id"]
+        serializable_namespaces = []
+        for namespace in namespaces:
+            if hasattr(namespace, '__dict__'):
+                # 如果是对象，转换为字典
+                serializable_namespace = {}
+                for key, value in namespace.__dict__.items():
+                    if not key.startswith('_'):
+                        serializable_namespace[key] = value
+                serializable_namespaces.append(serializable_namespace)
+            elif isinstance(namespace, dict):
+                serializable_namespaces.append(namespace)
+            else:
+                # 其他类型直接添加
+                serializable_namespaces.append(namespace)
 
-            # 获取实验的图表
-            exp_charts = chart_repository.get_experiment_charts(exp_id)
-            for chart in exp_charts:
-                # 添加实验信息到图表
-                chart["experiment"] = experiment
-                all_charts.append(chart)
-            print("Got charts for experiment", exp_id, len(exp_charts))
-            # 获取实验的命名空间
-            from ..repositories import namespace_repository
-            exp_namespaces = namespace_repository.get_experiment_namespaces(exp_id)
-            print("Got namespaces for experiment", exp_namespaces)
-            for namespace in exp_namespaces:
-                namespace["experiment"] = experiment
-                all_namespaces.append(namespace)
-
-        # 按命名空间和图表键进行分组
-        grouped_charts = {}
-        for chart in all_charts:
-            key = chart["key"]
-            if key not in grouped_charts:
-                grouped_charts[key] = []
-            grouped_charts[key].append(chart)
-        print("Got charts for all experiments", {
-            "charts": list(grouped_charts.values()),
-            "namespaces": all_namespaces,
-            "experiments": experiments
-        })
-        return SUCCESS_200({
-            "charts": list(grouped_charts.values()),
-            "namespaces": all_namespaces,
-            "experiments": experiments
-        })
+        # 获取项目下所有实验的图表数据
+        return SUCCESS_200({"charts": serializable_charts, "namespaces": serializable_namespaces})
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         swanlog.error(f"Get project charts error: {e}")
+        swanlog.error(f"Full traceback: {error_details}")
         return DATA_ERROR_500(f"Failed to get project charts: {e}")
 
 

@@ -19,7 +19,7 @@ except ImportError:
     # Use TextField instead and handle JSON serialization manually
     JSONField = TextField
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
 
 
@@ -64,6 +64,61 @@ class CloudBaseModel(Model):
                 result[field_name] = value.id
             else:
                 result[field_name] = value
+        return result
+
+    # 新增：统一将查询/模型/列表 等结果转换为 dict 列表，兼容原代码中使用的 search2list
+    @classmethod
+    def search2list(cls, items) -> List[Dict[str, Any]]:
+        """
+        将模型实例、模型列表或 dict 列表转换为 dict 列表，兼容不同 ORM/返回结构。
+        - 如果 items 为 None -> 返回 []
+        - 如果 items 为单个实例 -> 返回 [instance.to_dict()]
+        - 如果 items 为可迭代 -> 遍历并转换每一项（支持 dict / model 有 to_dict / fallback 使用 __dict__）
+        """
+        if items is None:
+            return []
+        # 如果不是可迭代对象（例如单个模型实例），包装为列表
+        try:
+            iter(items)
+        except TypeError:
+            items = [items]
+        result: List[Dict[str, Any]] = []
+        for it in items:
+            if it is None:
+                continue
+            if isinstance(it, dict):
+                result.append(it)
+                continue
+            # 优先使用模型提供的 to_dict 方法
+            if hasattr(it, "to_dict") and callable(getattr(it, "to_dict")):
+                try:
+                    result.append(it.to_dict())
+                    continue
+                except Exception:
+                    pass
+            # Peewee model fallback: 使用 _meta.fields 获取字段值
+            try:
+                fields = getattr(it, "_meta", None)
+                if fields and hasattr(fields, "fields"):
+                    d = {}
+                    for fname in fields.fields:
+                        try:
+                            d[fname] = getattr(it, fname)
+                        except Exception:
+                            d[fname] = None
+                    result.append(d)
+                    continue
+            except Exception:
+                pass
+            # 最后回退到 __dict__（去掉私有属性）
+            try:
+                raw = getattr(it, "__dict__", {})
+                cleaned = {k: v for k, v in raw.items() if not k.startswith("_")}
+                result.append(cleaned)
+                continue
+            except Exception:
+                # 无法转换，跳过
+                continue
         return result
 
 

@@ -6,7 +6,6 @@
       :default-color="defaultColor"
       :get-color="getColor"
       :key="chartsPageKey"
-      v-if="groups.length"
     />
     <!-- 图表不存在 -->
     <p class="font-semibold pt-5 text-center" v-else-if="ready">Empty Charts</p>
@@ -22,17 +21,23 @@
  * @since: 2024-01-27 13:05:27
  **/
 import http from '@swanlab-vue/api/http'
-import { useProjectStore } from '@swanlab-vue/store'
+import { useProjectStore, useWorkspaceStore } from '@swanlab-vue/store'
 import { ref } from 'vue'
 import ChartsPage from './components/ChartsPage.vue'
 import { onUnmounted } from 'vue'
 const projectStore = useProjectStore()
-http.get('/project/charts').then(({ data }) => {
+const workspaceStore = useWorkspaceStore()
+http.get(`/project/${workspaceStore.currentProjectId}/charts`).then(({ data }) => {
   // 将namespaces转换为groups
   charts.value = data.charts
   namespaces.value = data.namespaces
   groups.value = generateGroups()
   ready.value = true
+  console.log('charts', charts.value)
+  console.log('namespaces', namespaces.value)
+  console.log('groups', groups.value)
+  console.log('ready', ready.value)
+  console.log('chartsView data', data)
 })
 const ready = ref(false)
 // ---------------------------------- 数据驱动 ----------------------------------
@@ -45,6 +50,7 @@ const chartsPageKey = ref(0)
 const generateGroups = () => {
   // 生成groups
   const groups = []
+
   namespaces.value.forEach((namespace) => {
     const group = {
       ...namespace,
@@ -54,16 +60,27 @@ const generateGroups = () => {
       const chart = charts.value.find((chart) => {
         return chart.id === chart_id
       })
+      if (!chart) {
+        return
+      }
+
       // 如果chart的所有source都为不可见，不push
-      if (chart.source.every((source) => !projectStore.showMap[source])) return
+      const allSourcesInvisible = chart.source.every((source) => !projectStore.showMap[source])
+      if (allSourcesInvisible) return
+
       // 首先找到所有source中不在error的keys中的source
       const sources = chart.source.filter((source) => !chart.error[source])
-      if (sources.every((source) => !projectStore.showMap[source])) return
+
+      const validSourcesInvisible = sources.every((source) => !projectStore.showMap[source])
+      if (validSourcesInvisible) return
+
       // 如果在source中不在error的keys中的都不可见，不push
       group.charts.push(chart)
     })
     // 如果group的所有chart都为不可见，不push
-    if (group.charts.length) groups.push(group)
+    if (group.charts.length) {
+      groups.push(group)
+    }
   })
   return groups
 }

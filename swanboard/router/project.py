@@ -83,8 +83,8 @@ async def _(project_id: int = None):
     return await delete_project(project_id)
 
 
-@router.get("/charts")
-def _(project_id: int = DEFAULT_PROJECT_ID):
+@router.get("/{project_id}/charts")
+def _(project_id: int):
     """获取多实验对比图表数据,并且考虑往期版本兼容性
     1. 如果当前项目的chart字段为0，先生成多实验对比数据，跳转步骤2
     2. 依据规则获取所有实验的图表数据

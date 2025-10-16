@@ -28,6 +28,7 @@ from ..controller.cloud import (
     get_workspaces
 )
 from ..dependencies.auth import validate_api_key_dependency
+from ..db.mysql import Account
 from swanboard.cloud_api.cloud_service import CloudSyncManager
 from swanboard.utils import swanlog
 
@@ -540,7 +541,7 @@ async def minio_config():
 @router.post('/minio/upload')
 async def minio_upload(
     request: Request,
-    account = Depends(validate_api_key_dependency)
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """Upload a file (multipart) and proxy it to server MinIO implementation.
 
@@ -576,7 +577,7 @@ async def minio_upload(
 @router.get('/minio/download')
 async def minio_download(
     object_key: str = Query(...),
-    account = Depends(validate_api_key_dependency)
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """Download object bytes proxied from server MinIO. Returns raw bytes."""
     try:
@@ -596,7 +597,7 @@ async def minio_download(
 async def minio_presign(
     object_key: str = Query(...),
     expiration: int = Query(3600),
-    account = Depends(validate_api_key_dependency)
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """Return a presigned URL for the given object (if supported by server).
 
@@ -617,7 +618,7 @@ async def minio_presign(
 @router.delete('/minio/delete')
 async def minio_delete(
     object_key: str = Query(...),
-    account = Depends(validate_api_key_dependency)
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """Delete object from server MinIO.
 
