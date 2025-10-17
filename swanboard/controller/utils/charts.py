@@ -7,6 +7,7 @@ r"""
 @Description:
     图表相关函数 - 云端版本
 """
+from ...db import CloudChart
 from ...db.mysql import CloudChart as Chart, CloudDisplay as Display, CloudNamespace as Namespace, CloudExperiment as Experiment
 from typing import List, Union
 
@@ -21,7 +22,7 @@ def get_exp_charts(id: int):
         实验id
     """
     charts: List[Chart] = Chart.filter(Chart.experiment == id)
-    chart_list = Chart.search2list(charts)
+    chart_list = CloudChart.search2list(charts)
     # 获取每个图表对应的数据源
     for index, chart in enumerate(charts):
         sources = []
@@ -85,8 +86,10 @@ def get_proj_charts(id: int):
     for _chart in multi_charts:
         sources, error = [], {}
         source_map = {}
+
         # 处理不同 ORM 返回值的兼容：优先使用 ORM 关联对象列表，否则尝试访问属性
-        for source in getattr(_chart, "sources", []) or []:
+        for source in _chart.sources:
+            print("chart source:", source)
             try:
                 # source -> tag -> experiment
                 tag = getattr(source, "tag", None) or getattr(source, "tag_id", None) or {}
