@@ -104,7 +104,7 @@ class URL(object):
 
     @staticmethod
     def is_localhost(ip):
-        return ip == "127.0.0.1" or ip == "host.docker.internal"
+        return ip == "127.0.0.1" or ip == "localhost"
 
     @staticmethod
     def is_zero_ip(ip):

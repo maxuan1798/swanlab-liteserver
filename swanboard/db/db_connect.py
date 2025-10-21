@@ -7,9 +7,15 @@ r"""
 @Description:
     数据库连接模块
 """
+import logging
 from peewee import MySQLDatabase
 from .table_config import tables, Tag
 from .migrate import compat_tag_key
+
+# 启用 Peewee SQL 日志
+logger = logging.getLogger('peewee')
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.DEBUG)
 
 db_config = None
 """
@@ -17,7 +23,7 @@ db_config = None
 """
 
 
-def connect(database: str = "swanlab", user: str = "swanlab", password: str = "swanlab123", host: str = "host.docker.internal", port: int = 3306, autocreate: bool = False) -> MySQLDatabase:
+def connect(database: str = "swanlab", user: str = "swanlab", password: str = "swanlab123", host: str = "localhost", port: int = 3306, autocreate: bool = False) -> MySQLDatabase:
     """
     连接MySQL数据库，只有调用此方法以后，数据库才会被创建，所有导出的类才可用
 

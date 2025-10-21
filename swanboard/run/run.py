@@ -76,9 +76,9 @@ class SwanBoardRun:
             import os
             db_config = {
                 'database': os.getenv('MYSQL_DATABASE', 'swanlab'),
-                'user': os.getenv('MYSQL_USER', 'root'),
-                'password': os.getenv('MYSQL_PASSWORD', ''),
-                'host': os.getenv('MYSQL_HOST', 'host.docker.internal'),
+                'user': os.getenv('MYSQL_USER', 'swanlab'),
+                'password': os.getenv('MYSQL_PASSWORD', 'swanlab123'),
+                'host': os.getenv('MYSQL_HOST', 'localhost'),
                 'port': int(os.getenv('MYSQL_PORT', '3306')),
                 'autocreate': True
             }

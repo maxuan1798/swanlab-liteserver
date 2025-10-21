@@ -160,7 +160,11 @@ class Experiment(SwanModel):
         """
         # 检查项目是否存在
         if not Project.select().where(Project.id == project_id).exists():
-            raise ForeignProNotExistedError("项目不存在")
+            if project_id == Project.DEFAULT_PROJECT_ID:
+                # 如果是默认项目不存在，则创建一个默认项目
+                Project.init()
+            else:
+                raise ForeignProNotExistedError("项目不存在")
         # 这个sum是+1以后的值
         _sum = Project.increase_sum(project_id)
         light, dark = colors

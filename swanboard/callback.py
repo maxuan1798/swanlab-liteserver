@@ -5,7 +5,6 @@ from .db import add_multi_chart, connect, NotExistedError, ExistedError, ChartTy
 from typing import Tuple, Optional
 from swanboard.utils import swanlog
 import time
-import re
 
 
 class SwanBoardCallback(SwanKitCallback):
@@ -30,7 +29,7 @@ class SwanBoardCallback(SwanKitCallback):
                 'database': self.db_config.get('database', 'swanlab'),
                 'user': self.db_config.get('user', 'root'),
                 'password': self.db_config.get('password', ''),
-                'host': self.db_config.get('host', 'host.docker.internal'),
+                'host': self.db_config.get('host', 'localhost'),
                 'port': self.db_config.get('port', 3306),
                 'autocreate': self.db_config.get('autocreate', True)
             }
@@ -39,7 +38,7 @@ class SwanBoardCallback(SwanKitCallback):
                 'database': os.getenv('MYSQL_DATABASE', 'swanlab'),
                 'user': os.getenv('MYSQL_USER', 'root'),
                 'password': os.getenv('MYSQL_PASSWORD', ''),
-                'host': os.getenv('MYSQL_HOST', 'host.docker.internal'),
+                'host': os.getenv('MYSQL_HOST', 'localhost'),
                 'port': int(os.getenv('MYSQL_PORT', '3306')),
                 'autocreate': True
             }
@@ -57,11 +56,32 @@ class SwanBoardCallback(SwanKitCallback):
         *args,
         **kwargs,
     ):
-        pattern = r"-\d+$"
+        original_exp_name = exp_name
+        print("Before init experiment:", original_exp_name)
         # ---------------------------------- 实验名称校验 ----------------------------------
         # 这个循环的目的是如果创建失败则等零点五秒重新生成后缀重新创建，直到创建成功
-        # 搜索所有以exp_name开头的实验
-        count = Experiment.filter(Experiment.name.startswith(exp_name)).count()
+
+        def find_next_available_name(base_name: str) -> str:
+            """找到下一个可用的实验名称"""
+            # 首先尝试原始名称
+            if not Experiment.filter(Experiment.name == base_name).exists():
+                return base_name
+
+            # 获取所有以base_name开头的实验名称
+            existing_names = [exp.name for exp in Experiment.filter(Experiment.name.startswith(base_name))]
+
+            # 提取所有数字后缀
+            max_suffix = 0
+            for name in existing_names:
+                if name == base_name:
+                    max_suffix = max(max_suffix, 1)
+                elif name.startswith(base_name + "-"):
+                    suffix_part = name[len(base_name) + 1:]
+                    if suffix_part.isdigit():
+                        max_suffix = max(max_suffix, int(suffix_part) + 1)
+
+            return f"{base_name}-{max_suffix}"
+
         while True:
             try:
                 # 获得数据库实例
@@ -74,15 +94,8 @@ class SwanBoardCallback(SwanKitCallback):
                 )
                 break
             except ExistedError:
-                count += 1
                 swanlog.debug(f"Experiment {exp_name} has existed, try another name...")
-                # 以-{数字}结尾
-                if bool(re.search(pattern, exp_name)):
-                    arr = exp_name.split("-")
-                    arr[-1] = str(count)
-                    exp_name = "-".join(arr)
-                else:
-                    exp_name = f"{exp_name}-{count}"
+                exp_name = find_next_available_name(original_exp_name)
                 time.sleep(0.2)
 
     def on_log(self, *args, **kwargs):

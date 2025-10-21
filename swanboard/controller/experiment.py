@@ -141,7 +141,7 @@ def get_experiment_info(experiment_id: int):
     """
 
     # Ensure database connection is established
-    db = connect()
+    db = connect(host=os.getenv('MYSQL_HOST', 'host.docker.internal'))
     experiment = Experiment.get(experiment_id).__dict__()
     experiment.pop("project_id")
 
@@ -182,7 +182,7 @@ def get_tag_data(experiment_id: int, tag: str) -> dict:
     except NotExistedError:
         return NOT_FOUND_404("experiment not found")
     if not os.path.exists(tag_path):
-        return NOT_FOUND_404(f"tag folder not found {tag_folder}")
+        return NOT_FOUND_404(f"tag folder not found {tag_path}")
     # 获取目录下存储的所有数据
     tag_data: list = []
     # ---------------------------------- 读取文件数据 ----------------------------------

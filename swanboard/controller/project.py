@@ -7,7 +7,7 @@ r"""
 @Description:
     项目相关 api 的处理函数
 """
-
+import json
 import os
 import ujson
 import shutil
@@ -78,11 +78,12 @@ def get_project_info(project_id: int = DEFAULT_PROJECT_ID) -> dict:
 
     try:
         # Ensure database connection is established
-        db = connect()
+        db = connect(host=os.getenv('MYSQL_HOST', 'host.docker.internal'))
+        print("select project id:", project_id)
         project = Project.filter(Project.id == project_id).first()
-        print("project:", project)
         data = project.__dict__()
         data["logdir"] = get_swanlog_dir()
+        print("get swan log dir:", data["logdir"])
         experiments = __to_list(project.experiments)
         for experiment in experiments:
             experiment["experiment_id"] = experiment["id"]

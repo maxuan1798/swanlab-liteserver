@@ -82,8 +82,8 @@ class Project(SwanModel):
             项目实例
         """
         # 如果已经初始化，则不创建，直接返回第一条数据实例
-        if cls.select().count() >= 1:
-            return cls.filter(cls.id == cls.DEFAULT_PROJECT_ID)[0]
+        # if cls.select().count() >= 1:
+        #     return cls.filter(cls.id == cls.DEFAULT_PROJECT_ID)[0]
         # 创建项目
         return cls.create(
             name=name,
