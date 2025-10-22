@@ -1,6 +1,7 @@
 <template>
   <div class="flex flex-col min-h-full bg-higher">
     <ChartsPage
+      v-if="groups.length > 0"
       :groups="groups"
       :charts="charts"
       :default-color="defaultColor"
