@@ -42,7 +42,7 @@ def validate_api_key_dependency(
         )
 
     token = credentials.credentials
-
+    print("Received token:", token)
     # 验证JWT令牌
     payload = AuthService.verify_token(token, "access")
     if not payload:

@@ -157,7 +157,7 @@ class AuthService:
                 AuthConfig.JWT_SECRET_KEY,
                 algorithms=[AuthConfig.JWT_ALGORITHM]
             )
-
+            print("printing payload:", payload)
             if payload.get("type") != token_type:
                 return None
 

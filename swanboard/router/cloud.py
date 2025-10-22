@@ -150,7 +150,8 @@ _manager = CloudSyncManager(workspace=_cloud_workspace, user=_cloud_user)
 )
 async def create_or_sync_project(
     project_data: ProjectSyncRequest,
-    request: Request
+    request: Request,
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """
     ## 同步项目到云端
@@ -170,7 +171,7 @@ async def create_or_sync_project(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_project(request)
+    return await sync_project(request, account)
 
 
 # ================================== 实验相关路由 ==================================
@@ -187,7 +188,8 @@ async def create_or_sync_project(
 )
 async def create_or_sync_experiment(
     experiment_data: ExperimentSyncRequest,
-    request: Request
+    request: Request,
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """
     ## 同步实验到云端
@@ -207,7 +209,7 @@ async def create_or_sync_experiment(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_experiment(request)
+    return await sync_experiment(request, account)
 
 
 @router.put(
@@ -223,7 +225,8 @@ async def create_or_sync_experiment(
 async def update_experiment_status_route(
     experiment_id: str,
     status_data: ExperimentStatusRequest,
-    request: Request
+    request: Request,
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """
     ## 更新实验状态
@@ -243,7 +246,7 @@ async def update_experiment_status_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await update_experiment_status(experiment_id, request)
+    return await update_experiment_status(experiment_id, request, account)
 
 
 # ================================== 运行时信息相关路由 ==================================
@@ -261,7 +264,8 @@ async def update_experiment_status_route(
 )
 async def sync_runtime_info_route(
     runtime_data: RuntimeInfoSyncRequest,
-    request: Request
+    request: Request,
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """
     ## 同步运行时信息到云端
@@ -282,7 +286,7 @@ async def sync_runtime_info_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_runtime_info(request)
+    return await sync_runtime_info(request, account)
 
 
 @router.get(
@@ -295,7 +299,8 @@ async def sync_runtime_info_route(
     }
 )
 async def get_runtime_info_route(
-    experiment_id: str
+    experiment_id: str,
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """
     ## 获取实验运行时信息
@@ -316,7 +321,7 @@ async def get_runtime_info_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await get_runtime_info(experiment_id)
+    return await get_runtime_info(experiment_id, account)
 
 
 # ================================== 列/指标相关路由 ==================================
@@ -332,7 +337,8 @@ async def get_runtime_info_route(
 )
 async def create_or_sync_column(
     column_data: ColumnSyncRequest,
-    request: Request
+    request: Request,
+    account: Account = Depends(validate_api_key_dependency)
 ):
     """
     ## 同步指标列到云端
@@ -353,7 +359,7 @@ async def create_or_sync_column(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_column(request)
+    return await sync_column(request, account)
 
 
 # ================================== 查询相关路由 ==================================
