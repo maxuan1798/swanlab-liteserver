@@ -27,8 +27,10 @@ from ..controller.cloud import (
     get_project_experiments,
     get_workspaces
 )
-from ..dependencies.auth import validate_api_key_dependency
+from ..dependencies.auth import validate_platform_api_key_dependency
 from ..db.mysql import Account
+from ..db.mysql.api_key_models import APIKey
+from typing import Union
 
 from swanboard.cloud_api.cloud_service import CloudSyncManager
 from swanboard.utils import swanlog
@@ -151,7 +153,7 @@ _manager = CloudSyncManager(workspace=_cloud_workspace, user=_cloud_user)
 async def create_or_sync_project(
     project_data: ProjectSyncRequest,
     request: Request,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """
     ## 同步项目到云端
@@ -171,7 +173,7 @@ async def create_or_sync_project(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_project(request, account)
+    return await sync_project(request, auth)
 
 
 # ================================== 实验相关路由 ==================================
@@ -189,7 +191,7 @@ async def create_or_sync_project(
 async def create_or_sync_experiment(
     experiment_data: ExperimentSyncRequest,
     request: Request,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """
     ## 同步实验到云端
@@ -209,7 +211,7 @@ async def create_or_sync_experiment(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_experiment(request, account)
+    return await sync_experiment(request, auth)
 
 
 @router.put(
@@ -226,7 +228,7 @@ async def update_experiment_status_route(
     experiment_id: str,
     status_data: ExperimentStatusRequest,
     request: Request,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """
     ## 更新实验状态
@@ -246,7 +248,7 @@ async def update_experiment_status_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await update_experiment_status(experiment_id, request, account)
+    return await update_experiment_status(experiment_id, request, auth)
 
 
 # ================================== 运行时信息相关路由 ==================================
@@ -265,7 +267,7 @@ async def update_experiment_status_route(
 async def sync_runtime_info_route(
     runtime_data: RuntimeInfoSyncRequest,
     request: Request,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """
     ## 同步运行时信息到云端
@@ -286,7 +288,7 @@ async def sync_runtime_info_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_runtime_info(request, account)
+    return await sync_runtime_info(request, auth)
 
 
 @router.get(
@@ -300,7 +302,7 @@ async def sync_runtime_info_route(
 )
 async def get_runtime_info_route(
     experiment_id: str,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """
     ## 获取实验运行时信息
@@ -321,7 +323,7 @@ async def get_runtime_info_route(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await get_runtime_info(experiment_id, account)
+    return await get_runtime_info(experiment_id, auth)
 
 
 # ================================== 列/指标相关路由 ==================================
@@ -338,7 +340,7 @@ async def get_runtime_info_route(
 async def create_or_sync_column(
     column_data: ColumnSyncRequest,
     request: Request,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """
     ## 同步指标列到云端
@@ -359,7 +361,7 @@ async def create_or_sync_column(
     ### 认证
     需要在Authorization header中提供有效的API密钥
     """
-    return await sync_column(request, account)
+    return await sync_column(request, auth)
 
 
 # ================================== 查询相关路由 ==================================
@@ -548,7 +550,7 @@ async def minio_config():
 @router.post('/minio/upload')
 async def minio_upload(
     request: Request,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """Upload a file (multipart) and proxy it to server MinIO implementation.
 
@@ -584,7 +586,7 @@ async def minio_upload(
 @router.get('/minio/download')
 async def minio_download(
     object_key: str = Query(...),
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """Download object bytes proxied from server MinIO. Returns raw bytes."""
     try:
@@ -604,7 +606,7 @@ async def minio_download(
 async def minio_presign(
     object_key: str = Query(...),
     expiration: int = Query(3600),
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """Return a presigned URL for the given object (if supported by server).
 
@@ -625,7 +627,7 @@ async def minio_presign(
 @router.delete('/minio/delete')
 async def minio_delete(
     object_key: str = Query(...),
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ):
     """Delete object from server MinIO.
 

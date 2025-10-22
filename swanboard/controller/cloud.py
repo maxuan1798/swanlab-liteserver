@@ -10,7 +10,7 @@
 """
 
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 from fastapi import Request, HTTPException, Header, Depends
 
 # 使用CloudSyncManager处理业务逻辑
@@ -18,8 +18,9 @@ from ..cloud_api import CloudSyncManager
 from ..repositories import connection_manager
 
 # 认证依赖
-from ..dependencies.auth import validate_api_key_dependency
+from ..dependencies.auth import validate_platform_api_key_dependency
 from ..db.mysql import Account
+from ..db.mysql.api_key_models import APIKey
 
 # 响应模块
 from ..module.resp import (
@@ -33,7 +34,7 @@ from ..utils import swanlog
 
 # ================================== 项目相关API ==================================
 
-async def sync_project(request: Request, account: Account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
+async def sync_project(request: Request, auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)) -> Dict[str, Any]:
     """
     同步项目到云端数据库
 
@@ -64,7 +65,16 @@ async def sync_project(request: Request, account: Account = Depends(validate_api
 
         swanlog.info(f"project name: {project_name}")
         swanlog.info(f"workspace: {workspace}")
-        swanlog.info(f"authenticated user: {account.email}")
+
+        # 处理认证信息
+        if isinstance(auth, Account):
+            # 用户认证
+            user_identifier = auth.email
+            swanlog.info(f"authenticated user: {user_identifier}")
+        else:
+            # API Key认证
+            user_identifier = f"api_key:{auth.key_id}"
+            swanlog.info(f"authenticated via API Key: {auth.key_id}")
 
         # 验证工作空间
         if not connection_manager.validate_workspace(workspace):
@@ -75,7 +85,7 @@ async def sync_project(request: Request, account: Account = Depends(validate_api
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=workspace,
-            user=account.email  # 使用认证用户的邮箱作为用户标识
+            user=user_identifier  # 使用认证标识作为用户标识
         )
 
         # 使用CloudSyncManager同步项目
@@ -100,7 +110,7 @@ async def sync_project(request: Request, account: Account = Depends(validate_api
             "description": project.description,
             "workspace": workspace,
             "existed": True,  # CloudSyncManager会处理存在性逻辑
-            "created_by": account.email
+            "created_by": user_identifier
         })
 
     except Exception as e:
@@ -111,7 +121,7 @@ async def sync_project(request: Request, account: Account = Depends(validate_api
 
 # ================================== 实验相关API ==================================
 
-async def sync_experiment(request: Request, account: Account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
+async def sync_experiment(request: Request, auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)) -> Dict[str, Any]:
     """
     同步实验到云端数据库
 
@@ -145,7 +155,15 @@ async def sync_experiment(request: Request, account: Account = Depends(validate_
         colors = body.get('colors', [])
         workspace = body['workspace']
 
-        swanlog.info(f"authenticated user: {account.email}")
+        # 处理认证信息
+        if isinstance(auth, Account):
+            # 用户认证
+            user_identifier = auth.email
+            swanlog.info(f"authenticated user: {user_identifier}")
+        else:
+            # API Key认证
+            user_identifier = f"api_key:{auth.key_id}"
+            swanlog.info(f"authenticated via API Key: {auth.key_id}")
 
         # 验证工作空间
         if not connection_manager.validate_workspace(workspace):
@@ -159,7 +177,7 @@ async def sync_experiment(request: Request, account: Account = Depends(validate_
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=workspace,
-            user=account.email  # 使用认证用户的邮箱作为用户标识
+            user=user_identifier  # 使用认证标识作为用户标识
         )
 
         # 首先需要有一个项目上下文，如果提供了project_id，先设置项目
@@ -197,7 +215,7 @@ async def sync_experiment(request: Request, account: Account = Depends(validate_
             "description": experiment.description,
             "workspace": workspace,
             "existed": True,  # CloudSyncManager会处理存在性逻辑
-            "created_by": account.email
+            "created_by": user_identifier
         })
 
     except Exception as e:
@@ -207,7 +225,7 @@ async def sync_experiment(request: Request, account: Account = Depends(validate_
 
 # ================================== 列/指标相关API ==================================
 
-async def sync_column(request: Request, account: Account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
+async def sync_column(request: Request, auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)) -> Dict[str, Any]:
     """
     同步列/指标到云端数据库
 
@@ -291,7 +309,7 @@ async def sync_column(request: Request, account: Account = Depends(validate_api_
 async def update_experiment_status(
     experiment_id: str,
     request: Request,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     更新实验状态
@@ -348,7 +366,7 @@ async def update_experiment_status(
 
 # ================================== 运行时信息API ==================================
 
-async def sync_runtime_info(request: Request, account: Account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
+async def sync_runtime_info(request: Request, auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)) -> Dict[str, Any]:
     """
     同步实验运行时信息到云端数据库
 
@@ -393,10 +411,18 @@ async def sync_runtime_info(request: Request, account: Account = Depends(validat
         if not project:
             return DATA_ERROR_500("Project not found for experiment")
 
+        # 处理认证信息
+        if isinstance(auth, Account):
+            # 用户认证
+            user_identifier = auth.email
+        else:
+            # API Key认证
+            user_identifier = f"api_key:{auth.key_id}"
+
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=project.workspace,
-            user=account.email  # 使用认证用户的邮箱作为用户标识
+            user=user_identifier  # 使用认证标识作为用户标识
         )
 
         # 设置当前实验上下文
@@ -435,7 +461,7 @@ async def sync_runtime_info(request: Request, account: Account = Depends(validat
 
 async def get_runtime_info(
     experiment_id: str,
-    account: Account = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验运行时信息
@@ -458,10 +484,18 @@ async def get_runtime_info(
         if not project:
             return DATA_ERROR_500("Project not found for experiment")
 
+        # 处理认证信息
+        if isinstance(auth, Account):
+            # 用户认证
+            user_identifier = auth.email
+        else:
+            # API Key认证
+            user_identifier = f"api_key:{auth.key_id}"
+
         # 创建CloudSyncManager实例
         sync_manager = CloudSyncManager(
             workspace=project.workspace,
-            user=account.email  # 使用认证用户的邮箱作为用户标识
+            user=user_identifier  # 使用认证标识作为用户标识
         )
 
         # 获取运行时信息

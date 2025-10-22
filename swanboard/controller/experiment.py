@@ -369,6 +369,7 @@ def get_experiment_charts(
         return DATA_ERROR_500(f"Failed to get experiment charts: {e}")
 
 
+
 def get_recent_logs(
     experiment_id: int,
     _: None = Depends(validate_api_key_dependency)
@@ -519,6 +520,48 @@ def get_experimet_charts(
     这是 get_experiment_charts 的别名
     """
     return get_experiment_charts(experiment_id, _)
+
+
+def get_experiment_logs_by_names(
+    project_name: str,
+    experiment_name: str,
+    workspace: str = None,
+    _: None = Depends(validate_api_key_dependency)
+) -> Dict[str, Any]:
+    """
+    根据项目名称和实验名称获取实验日志
+
+    GET /api/v1/experiments/logs
+    Query Parameters:
+        project_name: 项目名称
+        experiment_name: 实验名称
+        workspace: 工作空间（可选）
+
+    Returns:
+        实验日志信息
+    """
+    # JWT认证已通过依赖注入处理
+
+    try:
+        # 首先根据项目名称和实验名称找到实验
+        experiment = experiment_repository.get_by_project_and_experiment_name(
+            project_name=project_name,
+            experiment_name=experiment_name,
+            workspace=workspace
+        )
+
+        if not experiment:
+            return NOT_FOUND_404(f"Experiment '{experiment_name}' not found in project '{project_name}'")
+
+        # 使用现有的 get_recent_logs 函数获取日志
+        return get_recent_logs(experiment.id, _)
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        swanlog.error(f"Get experiment logs by names error: {e}")
+        swanlog.error(f"Full traceback: {error_details}")
+        return DATA_ERROR_500(f"Failed to get experiment logs: {e}")
 
 
 # ================================== 实验信息修改 ==================================

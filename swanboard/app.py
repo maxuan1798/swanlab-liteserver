@@ -176,6 +176,9 @@ from .router.cloud import router as cloud
 from .router.auth import router as auth
 from .router.oauth import router as oauth
 
+# API Key 管理路由
+from .router.api_key import router as api_key
+
 # 使用配置列表，统一导入
 prefix = "/api/v1"
 app.include_router(project, prefix=prefix + "/project", tags=["Projects"])
@@ -186,3 +189,4 @@ app.include_router(chart, prefix=prefix + "/chart", tags=["Charts"])
 app.include_router(cloud, prefix=prefix + "/cloud", tags=["Cloud Sync"])
 app.include_router(auth, prefix=prefix + "/auth", tags=["Authentication"])
 app.include_router(oauth, prefix=prefix + "/oauth", tags=["OAuth"])
+app.include_router(api_key, prefix=prefix, tags=["API Keys"])

@@ -251,6 +251,44 @@ class ExperimentRepository(BaseRepository[CloudExperiment]):
             swanlog.error(f"Failed to get experiments by status: {e}")
             return []
 
+    def get_by_project_and_experiment_name(self, project_name: str, experiment_name: str, workspace: str = None) -> Optional[CloudExperiment]:
+        """
+        根据项目名称和实验名称获取实验
+
+        Args:
+            project_name: 项目名称
+            experiment_name: 实验名称
+            workspace: 工作空间（可选）
+
+        Returns:
+            CloudExperiment: 实验实例，不存在返回None
+        """
+        if not self.ensure_connection():
+            return None
+
+        try:
+            # 首先找到项目
+            from .project import project_repository
+            project = project_repository.get_by_name_and_workspace(project_name, workspace)
+            if not project:
+                swanlog.warning(f"Project '{project_name}' not found in workspace '{workspace}'")
+                return None
+
+            # 然后找到实验
+            query = CloudExperiment.select().where(
+                (CloudExperiment.project == project.id) &
+                (CloudExperiment.name == experiment_name)
+            )
+
+            return query.first()
+
+        except CloudExperiment.DoesNotExist:
+            swanlog.warning(f"Experiment '{experiment_name}' not found in project '{project_name}'")
+            return None
+        except Exception as e:
+            swanlog.error(f"Failed to get experiment by project and experiment name: {e}")
+            return None
+
 
 # 全局实验仓库实例
 experiment_repository = ExperimentRepository()
