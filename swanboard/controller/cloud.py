@@ -19,6 +19,7 @@ from ..repositories import connection_manager
 
 # 认证依赖
 from ..dependencies.auth import validate_api_key_dependency
+from ..db.mysql import Account
 
 # 响应模块
 from ..module.resp import (
@@ -32,7 +33,7 @@ from ..utils import swanlog
 
 # ================================== 项目相关API ==================================
 
-async def sync_project(request: Request, account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
+async def sync_project(request: Request, account: Account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
     """
     同步项目到云端数据库
 
@@ -110,7 +111,7 @@ async def sync_project(request: Request, account = Depends(validate_api_key_depe
 
 # ================================== 实验相关API ==================================
 
-async def sync_experiment(request: Request, account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
+async def sync_experiment(request: Request, account: Account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
     """
     同步实验到云端数据库
 
@@ -206,7 +207,7 @@ async def sync_experiment(request: Request, account = Depends(validate_api_key_d
 
 # ================================== 列/指标相关API ==================================
 
-async def sync_column(request: Request, account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
+async def sync_column(request: Request, account: Account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
     """
     同步列/指标到云端数据库
 
@@ -290,7 +291,7 @@ async def sync_column(request: Request, account = Depends(validate_api_key_depen
 async def update_experiment_status(
     experiment_id: str,
     request: Request,
-    account = Depends(validate_api_key_dependency)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     更新实验状态
@@ -347,7 +348,7 @@ async def update_experiment_status(
 
 # ================================== 运行时信息API ==================================
 
-async def sync_runtime_info(request: Request, account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
+async def sync_runtime_info(request: Request, account: Account = Depends(validate_api_key_dependency)) -> Dict[str, Any]:
     """
     同步实验运行时信息到云端数据库
 
@@ -434,7 +435,7 @@ async def sync_runtime_info(request: Request, account = Depends(validate_api_key
 
 async def get_runtime_info(
     experiment_id: str,
-    account = Depends(validate_api_key_dependency)
+    account: Account = Depends(validate_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     获取实验运行时信息
