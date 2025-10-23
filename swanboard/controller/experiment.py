@@ -554,7 +554,7 @@ def get_experiment_logs_by_names(
             return NOT_FOUND_404(f"Experiment '{experiment_name}' not found in project '{project_name}'")
 
         # 使用现有的 get_recent_logs 函数获取日志
-        return get_recent_logs(experiment.id, _)
+        return get_recent_logs(experiment.id)
 
     except Exception as e:
         import traceback
