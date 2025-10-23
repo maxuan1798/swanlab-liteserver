@@ -543,13 +543,14 @@ def get_experiment_logs_by_names(
     # JWT认证已通过依赖注入处理
 
     try:
+        print(f"Fetching logs for project '{project_name}', experiment '{experiment_name}', workspace '{workspace}'")
         # 首先根据项目名称和实验名称找到实验
         experiment = experiment_repository.get_by_project_and_experiment_name(
             project_name=project_name,
             experiment_name=experiment_name,
             workspace=workspace
         )
-
+        print(f'Fetched logs for project {project_name} and experiment {experiment_name}')
         if not experiment:
             return NOT_FOUND_404(f"Experiment '{experiment_name}' not found in project '{project_name}'")
 

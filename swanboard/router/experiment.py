@@ -33,6 +33,29 @@ from urllib.parse import quote
 router = APIRouter()
 
 
+# 根据项目名称和实验名称获取实验日志
+@router.get("/by-name/logs")
+async def _(project_name: str, experiment_name: str, workspace: str = None):
+    """根据项目名称和实验名称获取实验日志
+
+    Parameters
+    ----------
+    project_name : str
+        项目名称
+    experiment_name : str
+        实验名称
+    workspace : str, optional
+        工作空间名称，默认为None
+
+    Returns
+    -------
+    dict
+        实验日志信息
+    """
+
+    return get_experiment_logs_by_names(project_name, experiment_name, workspace)
+
+
 @router.get("/{experiment_id}")
 def _(experiment_id: int):
     """获取实验信息
@@ -220,26 +243,3 @@ async def _(experiment_id: int, request: Request):
     if show is None:
         return PARAMS_ERROR_422("Request parameter 'show'")
     return change_experiment_visibility(experiment_id, show)
-
-
-# 根据项目名称和实验名称获取实验日志
-@router.get("/logs")
-async def _(project_name: str, experiment_name: str, workspace: str = None):
-    """根据项目名称和实验名称获取实验日志
-
-    Parameters
-    ----------
-    project_name : str
-        项目名称
-    experiment_name : str
-        实验名称
-    workspace : str, optional
-        工作空间名称，默认为None
-
-    Returns
-    -------
-    dict
-        实验日志信息
-    """
-
-    return get_experiment_logs_by_names(project_name, experiment_name, workspace)
