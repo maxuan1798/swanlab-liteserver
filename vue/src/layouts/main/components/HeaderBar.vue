@@ -73,6 +73,12 @@
                 <span class="text-sm">Profile</span>
               </div>
             </SLMenuItem>
+            <SLMenuItem @click="handleSettings(close)">
+              <div class="flex items-center gap-2 w-full">
+                <SLIcon icon="settings" class="w-4 h-4" />
+                <span class="text-sm">Settings</span>
+              </div>
+            </SLMenuItem>
             <SLMenuItem @click="handleLogout(close)">
               <div class="flex items-center gap-2 w-full text-error-default">
                 <SLIcon icon="logout" class="w-4 h-4" />
@@ -226,6 +232,11 @@ const handleProfile = (close) => {
   close()
   // TODO: Navigate to profile page when implemented
   console.log('Navigate to profile page')
+}
+
+const handleSettings = (close) => {
+  close()
+  router.push('/settings/api-keys')
 }
 
 const handleLogout = async (close) => {

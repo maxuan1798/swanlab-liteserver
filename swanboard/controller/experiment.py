@@ -14,6 +14,8 @@ import ujson
 import yaml
 from typing import Dict, Any, Optional, List
 from fastapi import Request, HTTPException, Depends
+from typing import Union
+from ..db.mysql.api_key_models import APIKey
 
 # 使用CloudSyncManager和repositories处理业务逻辑
 from ..cloud_api import CloudSyncManager
@@ -22,7 +24,7 @@ from ..repositories import (
 )
 
 # 认证依赖
-from ..dependencies.auth import validate_api_key_dependency
+from ..dependencies.auth import validate_api_key_dependency, validate_platform_api_key_dependency
 from ..db.mysql import Account
 
 from ..db.mysql import (
@@ -526,7 +528,7 @@ def get_experiment_logs_by_names(
     project_name: str,
     experiment_name: str,
     workspace: str = None,
-    _: None = Depends(validate_api_key_dependency)
+    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
 ) -> Dict[str, Any]:
     """
     根据项目名称和实验名称获取实验日志

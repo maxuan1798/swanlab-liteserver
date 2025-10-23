@@ -97,6 +97,11 @@ const routes = [
     component: () => import('@swanlab-vue/views/help/HelpView.vue')
   },
   {
+    path: '/settings/api-keys',
+    name: 'api-keys',
+    component: () => import('@swanlab-vue/views/settings/ApiKeysView.vue')
+  },
+  {
     path: '/404',
     name: 'not-found',
     component: () => import('@swanlab-vue/views/error/pages/NotFound.vue')

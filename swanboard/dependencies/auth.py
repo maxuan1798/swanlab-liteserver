@@ -75,7 +75,8 @@ def validate_api_key_dependency(
 
 def validate_platform_api_key_dependency(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key")
 ) -> Union[Account, APIKey]:
     """
     FastAPI依赖函数 - 验证JWT令牌或平台级API Key
@@ -93,15 +94,29 @@ def validate_platform_api_key_dependency(
 
     Raises:
         HTTPException: 认证失败时抛出401或403错误
+
+    Parameters
+    ----------
+    request
+    credentials
+    x_api_key
     """
-    # 如果没有提供Authorization头
-    if not credentials:
+
+    auth_value = None
+
+    # 方式1: Authorization Bearer
+    if credentials:
+        auth_value = credentials.credentials
+
+    # 方式2: X-API-Key Header
+    elif x_api_key:
+        auth_value = x_api_key
+
+    if not auth_value:
         raise HTTPException(
             status_code=401,
-            detail="Missing Authorization header"
+            detail="Missing Authorization header or X-API-Key"
         )
-
-    auth_value = credentials.credentials
 
     # 首先尝试JWT令牌验证
     payload = AuthService.verify_token(auth_value, "access")
