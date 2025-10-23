@@ -27,10 +27,8 @@ from ..controller.cloud import (
     get_project_experiments,
     get_workspaces
 )
-from ..dependencies.auth import validate_platform_api_key_dependency
-from ..db.mysql import Account
+from ..dependencies.auth import validate_x_api_key_only_dependency
 from ..db.mysql.api_key_models import APIKey
-from typing import Union
 
 from swanboard.cloud_api.cloud_service import CloudSyncManager
 from swanboard.utils import swanlog
@@ -153,7 +151,7 @@ _manager = CloudSyncManager(workspace=_cloud_workspace, user=_cloud_user)
 async def create_or_sync_project(
     project_data: ProjectSyncRequest,
     request: Request,
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """
     ## 同步项目到云端
@@ -171,7 +169,7 @@ async def create_or_sync_project(
     - 组织管理机器学习项目
 
     ### 认证
-    需要在Authorization header中提供有效的API密钥
+    需要在 X-API-Key header 中提供有效的 API 密钥（格式：key_id:key_secret）
     """
     return await sync_project(request, auth)
 
@@ -191,7 +189,7 @@ async def create_or_sync_project(
 async def create_or_sync_experiment(
     experiment_data: ExperimentSyncRequest,
     request: Request,
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """
     ## 同步实验到云端
@@ -209,7 +207,7 @@ async def create_or_sync_experiment(
     - 关联实验到特定项目
 
     ### 认证
-    需要在Authorization header中提供有效的API密钥
+    需要在 X-API-Key header 中提供有效的 API 密钥（格式：key_id:key_secret）
     """
     return await sync_experiment(request, auth)
 
@@ -228,7 +226,7 @@ async def update_experiment_status_route(
     experiment_id: str,
     status_data: ExperimentStatusRequest,
     request: Request,
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """
     ## 更新实验状态
@@ -246,7 +244,7 @@ async def update_experiment_status_route(
     - 训练出错时标记为失败
 
     ### 认证
-    需要在Authorization header中提供有效的API密钥
+    需要在 X-API-Key header 中提供有效的 API 密钥（格式：key_id:key_secret）
     """
     return await update_experiment_status(experiment_id, request, auth)
 
@@ -267,7 +265,7 @@ async def update_experiment_status_route(
 async def sync_runtime_info_route(
     runtime_data: RuntimeInfoSyncRequest,
     request: Request,
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """
     ## 同步运行时信息到云端
@@ -286,7 +284,7 @@ async def sync_runtime_info_route(
     - 保存依赖包版本信息
 
     ### 认证
-    需要在Authorization header中提供有效的API密钥
+    需要在 X-API-Key header 中提供有效的 API 密钥（格式：key_id:key_secret）
     """
     return await sync_runtime_info(request, auth)
 
@@ -302,7 +300,7 @@ async def sync_runtime_info_route(
 )
 async def get_runtime_info_route(
     experiment_id: str,
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """
     ## 获取实验运行时信息
@@ -321,7 +319,7 @@ async def get_runtime_info_route(
     - 分析依赖包版本
 
     ### 认证
-    需要在Authorization header中提供有效的API密钥
+    需要在 X-API-Key header 中提供有效的 API 密钥（格式：key_id:key_secret）
     """
     return await get_runtime_info(experiment_id, auth)
 
@@ -340,7 +338,7 @@ async def get_runtime_info_route(
 async def create_or_sync_column(
     column_data: ColumnSyncRequest,
     request: Request,
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """
     ## 同步指标列到云端
@@ -359,7 +357,7 @@ async def create_or_sync_column(
     - 记录数据类型错误和异常
 
     ### 认证
-    需要在Authorization header中提供有效的API密钥
+    需要在 X-API-Key header 中提供有效的 API 密钥（格式：key_id:key_secret）
     """
     return await sync_column(request, auth)
 
@@ -518,10 +516,12 @@ async def api_info():
             }
         },
         "authentication": {
-            "type": "Bearer Token",
-            "header": "Authorization",
-            "format": "Bearer {token}",
-            "env_var": "SWANLAB_API_KEY"
+            "type": "X-API-Key",
+            "header": "X-API-Key",
+            "format": "key_id:key_secret",
+            "example": "sk_abc123:secret_xyz789",
+            "env_var": "SWANLAB_API_KEY",
+            "note": "Create API keys from the web dashboard: Settings > API Keys"
         }
     }
 
@@ -550,7 +550,7 @@ async def minio_config():
 @router.post('/minio/upload')
 async def minio_upload(
     request: Request,
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """Upload a file (multipart) and proxy it to server MinIO implementation.
 
@@ -586,7 +586,7 @@ async def minio_upload(
 @router.get('/minio/download')
 async def minio_download(
     object_key: str = Query(...),
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """Download object bytes proxied from server MinIO. Returns raw bytes."""
     try:
@@ -606,7 +606,7 @@ async def minio_download(
 async def minio_presign(
     object_key: str = Query(...),
     expiration: int = Query(3600),
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """Return a presigned URL for the given object (if supported by server).
 
@@ -627,7 +627,7 @@ async def minio_presign(
 @router.delete('/minio/delete')
 async def minio_delete(
     object_key: str = Query(...),
-    auth: Union[Account, APIKey] = Depends(validate_platform_api_key_dependency)
+    auth: APIKey = Depends(validate_x_api_key_only_dependency)
 ):
     """Delete object from server MinIO.
 
