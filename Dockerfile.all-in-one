@@ -1,0 +1,188 @@
+# SwanLab All-in-One Docker Image
+# 包含所有服务：SwanLab服务器、MySQL、ClickHouse、Redis、MinIO、Nginx、Fluent Bit
+
+FROM ubuntu:22.04
+
+# 设置非交互模式
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+
+# 安装基础系统依赖和软件包
+RUN apt-get update && apt-get install -y \
+    # 基础工具
+    wget \
+    curl \
+    gnupg \
+    lsb-release \
+    software-properties-common \
+    apt-transport-https \
+    ca-certificates \
+    supervisor \
+    tzdata \
+    # 编译工具
+    gcc \
+    g++ \
+    make \
+    cmake \
+    # Python相关
+    python3.9 \
+    python3.9-dev \
+    python3-pip \
+    # Node.js相关
+    nodejs \
+    npm \
+    # 网络工具
+    netcat \
+    telnet \
+    # 其他工具
+    vim \
+    htop \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# 创建python3符号链接
+RUN ln -sf /usr/bin/python3.9 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.9 /usr/bin/python
+
+# 安装MySQL Server 8.0
+RUN wget https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb && \
+    echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.0" | debconf-set-selections && \
+    DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config_0.8.24-1_all.deb && \
+    apt-get update && \
+    echo "mysql-community-server mysql-community-server/root-pass password swanlab123" | debconf-set-selections && \
+    echo "mysql-community-server mysql-community-server/re-root-pass password swanlab123" | debconf-set-selections && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server && \
+    rm mysql-apt-config_0.8.24-1_all.deb && \
+    rm -rf /var/lib/apt/lists/*
+
+# 安装ClickHouse
+RUN curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client && \
+    rm -rf /var/lib/apt/lists/*
+
+# 安装Redis
+RUN apt-get update && apt-get install -y redis-server && \
+    rm -rf /var/lib/apt/lists/*
+
+# 安装Nginx
+RUN apt-get update && apt-get install -y nginx && \
+    rm -rf /var/lib/apt/lists/*
+
+# 安装MinIO
+RUN wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /usr/local/bin/minio && \
+    chmod +x /usr/local/bin/minio && \
+    wget https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && \
+    chmod +x /usr/local/bin/mc
+
+# 安装Fluent Bit
+RUN curl https://raw.githubusercontent.com/fluent/fluent-bit/master/install.sh | sh && \
+    rm -rf /var/lib/apt/lists/*
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制项目文件
+COPY . .
+
+# 安装Python依赖
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# 安装Node.js依赖并构建前端
+RUN npm install && npm run build
+
+# 创建必要的目录
+RUN mkdir -p \
+    /app/data \
+    /app/logs \
+    /var/lib/mysql-files \
+    /var/log/mysql \
+    /var/log/clickhouse-server \
+    /var/log/redis \
+    /var/log/nginx \
+    /var/log/minio \
+    /var/log/fluent-bit \
+    /etc/supervisor/conf.d \
+    /data/minio \
+    /data/clickhouse \
+    /data/mysql \
+    /data/redis
+
+# 复制配置文件
+COPY docker/mysql/conf.d/mysql.cnf /etc/mysql/mysql.conf.d/mysql.cnf
+COPY docker/mysql/init/ /docker-entrypoint-initdb.d/
+COPY docker/clickhouse/config.xml /etc/clickhouse-server/config.xml
+COPY docker/clickhouse/init/init.sql /etc/clickhouse-server/init.sql
+COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY docker/fluent-bit/fluent-bit.conf /etc/fluent-bit/fluent-bit.conf
+COPY docker/fluent-bit/parsers.conf /etc/fluent-bit/parsers.conf
+
+# 设置服务配置文件权限
+RUN chown mysql:mysql /etc/mysql/mysql.conf.d/mysql.cnf && \
+    chown clickhouse:clickhouse /etc/clickhouse-server/config.xml && \
+    chown clickhouse:clickhouse /etc/clickhouse-server/init.sql && \
+    chmod 644 /etc/nginx/nginx.conf
+
+# 创建supervisord配置文件
+COPY docker/supervisor.conf /etc/supervisor/conf.d/supervisord.conf
+
+# 创建服务启动脚本
+COPY docker/start-services.sh /start-services.sh
+RUN chmod +x /start-services.sh
+
+# 设置环境变量
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV SWANLAB_LOG_DIR=/app/logs
+ENV SWANLAB_DATA_DIR=/app/data
+
+# MySQL环境变量
+ENV MYSQL_ROOT_PASSWORD=swanlab123
+ENV MYSQL_DATABASE=swanlab_cloud
+ENV MYSQL_USER=swanlab_user
+ENV MYSQL_PASSWORD=swanlab456
+
+# ClickHouse环境变量
+ENV CLICKHOUSE_USER=default
+ENV CLICKHOUSE_PASSWORD=password123
+
+# MinIO环境变量
+ENV MINIO_ROOT_USER=minioadmin
+ENV MINIO_ROOT_PASSWORD=minioadmin
+
+# Redis环境变量
+ENV REDIS_PASSWORD=""
+
+# SwanLab环境变量
+ENV SWANLAB_CLOUD_SYNC=1
+ENV MYSQL_HOST=localhost
+ENV MYSQL_PORT=3306
+ENV CLICKHOUSE_HOST=localhost
+ENV CLICKHOUSE_PORT=9000
+ENV REDIS_HOST=localhost
+ENV REDIS_PORT=6379
+ENV MINIO_ENDPOINT=http://localhost:9000
+ENV MINIO_ACCESS_KEY=minioadmin
+ENV MINIO_SECRET_KEY=minioadmin
+ENV MINIO_BUCKET=swanlab
+
+# 暴露端口
+EXPOSE 5173    # SwanLab服务器
+EXPOSE 3306    # MySQL
+EXPOSE 8123    # ClickHouse HTTP
+EXPOSE 9000    # ClickHouse Native / MinIO API
+EXPOSE 9001    # MinIO Console
+EXPOSE 6379    # Redis
+EXPOSE 80      # Nginx
+EXPOSE 24224   # Fluent Bit
+
+# 数据卷
+VOLUME ["/app/data", "/app/logs", "/data"]
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:5173/api/v1/cloud/health || exit 1
+
+# 启动所有服务
+CMD ["/start-services.sh"]
