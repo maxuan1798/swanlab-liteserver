@@ -7,9 +7,11 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Shanghai
 
-# 安装基础系统依赖和软件包
-RUN apt-get update && apt-get install -y \
-    # 基础工具
+# 设置时区
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 更新系统并安装基础软件包
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     wget \
     curl \
     gnupg \
@@ -18,48 +20,32 @@ RUN apt-get update && apt-get install -y \
     apt-transport-https \
     ca-certificates \
     supervisor \
-    tzdata \
-    # 编译工具
     gcc \
     g++ \
     make \
     cmake \
-    # Python相关
-    python3.9 \
-    python3.9-dev \
+    python3 \
+    python3-dev \
     python3-pip \
-    # Node.js相关
-    nodejs \
-    npm \
-    # 网络工具
-    netcat \
+    netcat-openbsd \
     telnet \
-    # 其他工具
     vim \
     htop \
     procps \
+    dirmngr \
     && rm -rf /var/lib/apt/lists/*
 
-# 创建python3符号链接
-RUN ln -sf /usr/bin/python3.9 /usr/bin/python3 && \
-    ln -sf /usr/bin/python3.9 /usr/bin/python
+# 创建python符号链接
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-# 安装MySQL Server 8.0
-RUN wget https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb && \
-    echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.0" | debconf-set-selections && \
-    DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config_0.8.24-1_all.deb && \
-    apt-get update && \
-    echo "mysql-community-server mysql-community-server/root-pass password swanlab123" | debconf-set-selections && \
-    echo "mysql-community-server mysql-community-server/re-root-pass password swanlab123" | debconf-set-selections && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server && \
-    rm mysql-apt-config_0.8.24-1_all.deb && \
+# 安装Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# 安装ClickHouse
-RUN curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
-    apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client && \
+# 安装MySQL Server
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server && \
     rm -rf /var/lib/apt/lists/*
 
 # 安装Redis
@@ -70,15 +56,36 @@ RUN apt-get update && apt-get install -y redis-server && \
 RUN apt-get update && apt-get install -y nginx && \
     rm -rf /var/lib/apt/lists/*
 
+# 安装ClickHouse (使用官方仓库)
+RUN apt-get update && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4 && \
+    echo "deb https://repo.clickhouse.com/deb/stable/ main/" | tee /etc/apt/sources.list.d/clickhouse.list && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client && \
+    rm -rf /var/lib/apt/lists/*
+
 # 安装MinIO
 RUN wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /usr/local/bin/minio && \
     chmod +x /usr/local/bin/minio && \
     wget https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && \
     chmod +x /usr/local/bin/mc
 
-# 安装Fluent Bit
-RUN curl https://raw.githubusercontent.com/fluent/fluent-bit/master/install.sh | sh && \
-    rm -rf /var/lib/apt/lists/*
+# 创建必要的目录
+RUN mkdir -p \
+    /var/lib/mysql-files \
+    /var/log/mysql \
+    /var/log/clickhouse-server \
+    /var/log/redis \
+    /var/log/nginx \
+    /var/log/minio \
+    /var/log/fluent-bit \
+    /var/log/supervisor \
+    /etc/supervisor/conf.d \
+    /data/minio \
+    /data/clickhouse \
+    /data/mysql \
+    /data/redis \
+    /docker-entrypoint-initdb.d
 
 # 设置工作目录
 WORKDIR /app
@@ -92,44 +99,25 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # 安装Node.js依赖并构建前端
 RUN npm install && npm run build
 
-# 创建必要的目录
-RUN mkdir -p \
-    /app/data \
-    /app/logs \
-    /var/lib/mysql-files \
-    /var/log/mysql \
-    /var/log/clickhouse-server \
-    /var/log/redis \
-    /var/log/nginx \
-    /var/log/minio \
-    /var/log/fluent-bit \
-    /etc/supervisor/conf.d \
-    /data/minio \
-    /data/clickhouse \
-    /data/mysql \
-    /data/redis
+# 创建应用目录
+RUN mkdir -p /app/data /app/logs
 
 # 复制配置文件
-COPY docker/mysql/conf.d/mysql.cnf /etc/mysql/mysql.conf.d/mysql.cnf
-COPY docker/mysql/init/ /docker-entrypoint-initdb.d/
-COPY docker/clickhouse/config.xml /etc/clickhouse-server/config.xml
-COPY docker/clickhouse/init/init.sql /etc/clickhouse-server/init.sql
-COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY docker/fluent-bit/fluent-bit.conf /etc/fluent-bit/fluent-bit.conf
-COPY docker/fluent-bit/parsers.conf /etc/fluent-bit/parsers.conf
-
-# 设置服务配置文件权限
-RUN chown mysql:mysql /etc/mysql/mysql.conf.d/mysql.cnf && \
-    chown clickhouse:clickhouse /etc/clickhouse-server/config.xml && \
-    chown clickhouse:clickhouse /etc/clickhouse-server/init.sql && \
-    chmod 644 /etc/nginx/nginx.conf
-
-# 创建supervisord配置文件
 COPY docker/supervisor.conf /etc/supervisor/conf.d/supervisord.conf
-
-# 创建服务启动脚本
 COPY docker/start-services.sh /start-services.sh
 RUN chmod +x /start-services.sh
+
+# 复制其他配置文件 (如果存在)
+RUN if [ -f docker/mysql/conf.d/mysql.cnf ]; then cp docker/mysql/conf.d/mysql.cnf /etc/mysql/mysql.conf.d/mysql.cnf; fi
+RUN if [ -d docker/mysql/init ]; then cp -r docker/mysql/init/* /docker-entrypoint-initdb.d/ 2>/dev/null || true; fi
+RUN if [ -f docker/clickhouse/config.xml ]; then cp docker/clickhouse/config.xml /etc/clickhouse-server/config.xml; fi
+RUN if [ -f docker/clickhouse/init/init.sql ]; then cp docker/clickhouse/init/init.sql /etc/clickhouse-server/init.sql; fi
+RUN if [ -f docker/nginx/nginx.conf ]; then cp docker/nginx/nginx.conf /etc/nginx/nginx.conf; fi
+
+# 设置文件权限
+RUN chown -R mysql:mysql /var/lib/mysql /var/log/mysql 2>/dev/null || true && \
+    chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server 2>/dev/null || true && \
+    chown -R redis:redis /var/lib/redis /var/log/redis 2>/dev/null || true
 
 # 设置环境变量
 ENV PYTHONPATH=/app
@@ -182,8 +170,6 @@ EXPOSE 9001
 EXPOSE 6379
 # Nginx
 EXPOSE 80
-# Fluent Bit
-EXPOSE 24224
 
 # 数据卷
 VOLUME ["/app/data", "/app/logs", "/data"]
