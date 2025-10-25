@@ -91,7 +91,11 @@
         <div class="modal-content">
           <div class="modal-header">
             <h2 class="text-xl font-bold text-default">
-              {{ showEditDialog ? $t('settings.apiKeys.edit', 'Edit API Key') : $t('settings.apiKeys.create', 'Create API Key') }}
+              {{
+                showEditDialog
+                  ? $t('settings.apiKeys.edit', 'Edit API Key')
+                  : $t('settings.apiKeys.create', 'Create API Key')
+              }}
             </h2>
             <button @click="closeDialogs" class="btn-icon">
               <SLIcon icon="close" class="w-5 h-5" />
@@ -105,7 +109,7 @@
                 <SLIcon icon="warning" class="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <div class="flex-1">
                   <p class="font-semibold mb-2">
-                    {{ $t('settings.apiKeys.secretWarning', 'Save your API key - you won\'t see it again!') }}
+                    {{ $t('settings.apiKeys.secretWarning', "Save your API key - you won't see it again!") }}
                   </p>
                   <div class="secret-container">
                     <code class="secret-code">{{ createdKeySecret }}</code>
@@ -203,7 +207,12 @@
           </div>
           <div class="modal-body">
             <p class="text-dimmer mb-4">
-              {{ $t('settings.apiKeys.revokeConfirm', 'Are you sure you want to revoke this API key? This action cannot be undone.') }}
+              {{
+                $t(
+                  'settings.apiKeys.revokeConfirm',
+                  'Are you sure you want to revoke this API key? This action cannot be undone.'
+                )
+              }}
             </p>
             <div class="form-actions">
               <button @click="showRevokeDialog = false" class="btn-secondary">
@@ -278,7 +287,7 @@ const submitForm = async () => {
     if (showEditDialog.value && currentApiKey.value) {
       // Update existing key
       const response = await apiKeyAPI.update(currentApiKey.value.id, formData.value)
-      const index = apiKeys.value.findIndex(k => k.id === currentApiKey.value.id)
+      const index = apiKeys.value.findIndex((k) => k.id === currentApiKey.value.id)
       if (index !== -1) {
         apiKeys.value[index] = response.data
       }
@@ -328,7 +337,7 @@ const revokeApiKey = async () => {
   try {
     submitting.value = true
     await apiKeyAPI.revoke(currentApiKey.value.id)
-    apiKeys.value = apiKeys.value.filter(k => k.id !== currentApiKey.value.id)
+    apiKeys.value = apiKeys.value.filter((k) => k.id !== currentApiKey.value.id)
     showRevokeDialog.value = false
     currentApiKey.value = null
   } catch (error) {
@@ -426,7 +435,12 @@ onMounted(() => {
 
 .skeleton-card {
   @apply h-48 rounded-lg bg-higher;
-  background: linear-gradient(-45deg, var(--background-higher) 40%, var(--background-default) 55%, var(--background-higher) 63%);
+  background: linear-gradient(
+    -45deg,
+    var(--background-higher) 40%,
+    var(--background-default) 55%,
+    var(--background-higher) 63%
+  );
   background-size: 400% 100%;
   background-position: 100% 50%;
   animation: skeleton-animation 2s ease infinite;
