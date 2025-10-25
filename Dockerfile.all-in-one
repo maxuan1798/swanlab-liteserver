@@ -168,14 +168,22 @@ ENV MINIO_SECRET_KEY=minioadmin
 ENV MINIO_BUCKET=swanlab
 
 # 暴露端口
-EXPOSE 5173    # SwanLab服务器
-EXPOSE 3306    # MySQL
-EXPOSE 8123    # ClickHouse HTTP
-EXPOSE 9000    # ClickHouse Native / MinIO API
-EXPOSE 9001    # MinIO Console
-EXPOSE 6379    # Redis
-EXPOSE 80      # Nginx
-EXPOSE 24224   # Fluent Bit
+# SwanLab服务器
+EXPOSE 5173
+# MySQL
+EXPOSE 3306
+# ClickHouse HTTP
+EXPOSE 8123
+# ClickHouse Native / MinIO API
+EXPOSE 9000
+# MinIO Console
+EXPOSE 9001
+# Redis
+EXPOSE 6379
+# Nginx
+EXPOSE 80
+# Fluent Bit
+EXPOSE 24224
 
 # 数据卷
 VOLUME ["/app/data", "/app/logs", "/data"]
