@@ -145,9 +145,14 @@ EOF
 </clickhouse>
 EOF
 
+    # 设置所有ClickHouse相关目录的权限
     chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /var/run/clickhouse-server 2>/dev/null || true
     echo "✅ ClickHouse initialized"
 fi
+
+# 确保ClickHouse权限正确（即使目录已存在）
+echo "🔐 Setting ClickHouse permissions..."
+chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /var/run/clickhouse-server 2>/dev/null || true
 
 echo "🚀 Starting supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

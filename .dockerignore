@@ -1,36 +1,30 @@
 # Node and build artifacts
-node_modules
-**/node_modules
-dist
-build
-docker
+
+node_modules \*\*/node_modules dist build docker
+
 # 但允许复制 docker 配置文件到 all-in-one 镜像
-!docker/supervisor.conf
-!docker/start-services.sh
-!docker/mysql/
-!docker/clickhouse/
-!docker/nginx/
+
+!docker/supervisor.conf 
+!docker/supervisor-simple.conf 
+!docker/start-services.sh 
+!docker/start-services-simple.sh
+!docker/mysql/ 
+!docker/clickhouse/ 
+!docker/nginx/ 
 !docker/fluent-bit/
 
 # Docker-related
-docker-compose.yml
-.docker
-Dockerfile.*
+
+docker-compose.yml .docker Dockerfile.\*
 
 # Python artifacts
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-venv/
-.env
+
+**pycache**/ _.pyc _.pyo \*.pyd venv/ .env
 
 # Git and IDE
-.git
-.gitignore
-.vscode/
-.idea/
+
+.git .gitignore .vscode/ .idea/
 
 # misc
-*.log
-.DS_Store
+
+\*.log .DS_Store

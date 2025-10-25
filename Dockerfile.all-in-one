@@ -89,10 +89,12 @@ RUN mkdir -p \
     /docker-entrypoint-initdb.d \
     /var/run/nginx \
     /var/run/clickhouse-server \
-    /var/run/supervisor && \
+    /var/run/supervisor \
+    /var/lib/clickhouse/{data,metadata,tmp,user_files,access} && \
     chown mysql:mysql /var/lib/mysql-files /var/log/mysql 2>/dev/null || true && \
     chown redis:redis /var/log/redis 2>/dev/null || true && \
-    chown www-data:www-data /var/log/nginx /var/run/nginx 2>/dev/null || true
+    chown www-data:www-data /var/log/nginx /var/run/nginx 2>/dev/null || true && \
+    chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server /var/run/clickhouse-server 2>/dev/null || true
 
 # 设置工作目录
 WORKDIR /app
