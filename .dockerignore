@@ -4,6 +4,13 @@ node_modules
 dist
 build
 docker
+# 但允许复制 docker 配置文件到 all-in-one 镜像
+!docker/supervisor.conf
+!docker/start-services.sh
+!docker/mysql/
+!docker/clickhouse/
+!docker/nginx/
+!docker/fluent-bit/
 
 # Docker-related
 docker-compose.yml

@@ -58,8 +58,9 @@ RUN apt-get update && apt-get install -y nginx && \
 
 # 安装ClickHouse (使用官方仓库)
 RUN apt-get update && \
-    apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4 && \
-    echo "deb https://repo.clickhouse.com/deb/stable/ main/" | tee /etc/apt/sources.list.d/clickhouse.list && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /etc/apt/keyrings/clickhouse-keyring.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client && \
     rm -rf /var/lib/apt/lists/*
@@ -90,7 +91,7 @@ RUN mkdir -p \
 # 设置工作目录
 WORKDIR /app
 
-# 复制项目文件
+# 复制项目文件（.dockerignore 已配置允许复制 docker 配置文件）
 COPY . .
 
 # 安装Python依赖
@@ -102,17 +103,44 @@ RUN npm install && npm run build
 # 创建应用目录
 RUN mkdir -p /app/data /app/logs
 
-# 复制配置文件
-COPY docker/supervisor.conf /etc/supervisor/conf.d/supervisord.conf
-COPY docker/start-services.sh /start-services.sh
-RUN chmod +x /start-services.sh
+# 复制配置文件从 docker/ 文件夹到系统目录
+# Supervisor 配置和启动脚本
+RUN cp /app/docker/supervisor.conf /etc/supervisor/conf.d/supervisord.conf && \
+    cp /app/docker/start-services-debug.sh /start-services.sh && \
+    chmod +x /start-services.sh
 
-# 复制其他配置文件 (如果存在)
-RUN if [ -f docker/mysql/conf.d/mysql.cnf ]; then cp docker/mysql/conf.d/mysql.cnf /etc/mysql/mysql.conf.d/mysql.cnf; fi
-RUN if [ -d docker/mysql/init ]; then cp -r docker/mysql/init/* /docker-entrypoint-initdb.d/ 2>/dev/null || true; fi
-RUN if [ -f docker/clickhouse/config.xml ]; then cp docker/clickhouse/config.xml /etc/clickhouse-server/config.xml; fi
-RUN if [ -f docker/clickhouse/init/init.sql ]; then cp docker/clickhouse/init/init.sql /etc/clickhouse-server/init.sql; fi
-RUN if [ -f docker/nginx/nginx.conf ]; then cp docker/nginx/nginx.conf /etc/nginx/nginx.conf; fi
+# MySQL 配置和初始化脚本
+RUN if [ -f /app/docker/mysql/conf.d/mysql.cnf ]; then \
+        cp /app/docker/mysql/conf.d/mysql.cnf /etc/mysql/mysql.conf.d/mysql.cnf; \
+    fi && \
+    if [ -d /app/docker/mysql/init ]; then \
+        cp -r /app/docker/mysql/init/* /docker-entrypoint-initdb.d/ 2>/dev/null || true; \
+    fi
+
+# ClickHouse 配置和初始化脚本
+RUN if [ -f /app/docker/clickhouse/config.xml ]; then \
+        cp /app/docker/clickhouse/config.xml /etc/clickhouse-server/config.xml; \
+    fi && \
+    if [ -f /app/docker/clickhouse/init/init.sql ]; then \
+        mkdir -p /etc/clickhouse-server/init && \
+        cp /app/docker/clickhouse/init/init.sql /etc/clickhouse-server/init/init.sql; \
+    fi
+
+# Nginx 配置 (使用all-in-one专用配置)
+RUN if [ -f /app/docker/nginx/nginx-all-in-one.conf ]; then \
+        cp /app/docker/nginx/nginx-all-in-one.conf /etc/nginx/nginx.conf; \
+    elif [ -f /app/docker/nginx/nginx.conf ]; then \
+        cp /app/docker/nginx/nginx.conf /etc/nginx/nginx.conf; \
+    fi
+
+# Fluent Bit 配置 (如果需要日志收集)
+RUN if [ -f /app/docker/fluent-bit/fluent-bit.conf ]; then \
+        mkdir -p /etc/fluent-bit && \
+        cp /app/docker/fluent-bit/fluent-bit.conf /etc/fluent-bit/fluent-bit.conf; \
+    fi && \
+    if [ -f /app/docker/fluent-bit/parsers.conf ]; then \
+        cp /app/docker/fluent-bit/parsers.conf /etc/fluent-bit/parsers.conf; \
+    fi
 
 # 设置文件权限
 RUN chown -R mysql:mysql /var/lib/mysql /var/log/mysql 2>/dev/null || true && \
