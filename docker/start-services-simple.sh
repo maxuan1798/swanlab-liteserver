@@ -295,5 +295,43 @@ EOF
     echo "✅ ClickHouse password updated"
 fi
 
+# 启动ClickHouse进行初始化
+echo "🚀 Starting ClickHouse for initialization..."
+runuser -u clickhouse -- /usr/bin/clickhouse-server --config-file=/etc/clickhouse-server/config.xml --daemon
+CLICKHOUSE_PID=$!
+
+# 等待ClickHouse启动
+echo "⏳ Waiting for ClickHouse to be ready..."
+for i in {1..60}; do
+    if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" --query "SELECT 1" 2>/dev/null; then
+        echo "✅ ClickHouse is ready"
+        break
+    fi
+    if [ $i -eq 60 ]; then
+        echo "❌ ClickHouse failed to start in time, continuing anyway..."
+        echo "⚠️  ClickHouse initialization will be skipped"
+        kill $CLICKHOUSE_PID 2>/dev/null || true
+        break
+    fi
+    sleep 2
+done
+
+# 执行ClickHouse初始化脚本
+echo "📝 Running ClickHouse initialization script..."
+if [ -f "/etc/clickhouse-server/init/init.sql" ]; then
+    if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" < /etc/clickhouse-server/init/init.sql 2>/dev/null; then
+        echo "✅ ClickHouse initialization completed"
+    else
+        echo "⚠️  ClickHouse initialization had errors (may be normal if already exists)"
+    fi
+else
+    echo "⚠️  ClickHouse init script not found at /etc/clickhouse-server/init/init.sql"
+fi
+
+# 停止ClickHouse初始化实例
+echo "🛑 Stopping ClickHouse initialization instance..."
+kill $CLICKHOUSE_PID
+wait $CLICKHOUSE_PID 2>/dev/null || true
+
 echo "🚀 Starting supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
