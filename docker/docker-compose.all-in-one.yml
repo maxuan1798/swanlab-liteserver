@@ -23,6 +23,8 @@ services:
       # MinIO配置
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
 
       # Redis配置
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
@@ -39,8 +41,8 @@ services:
       CLICKHOUSE_PORT: 9000
       REDIS_HOST: localhost
       REDIS_PORT: 6379
-      MINIO_ENDPOINT: http://localhost:9002
-      MINIO_BUCKET: ${MINIO_BUCKET:-swanlab}
+      MINIO_ENDPOINT: http://localhost:9100
+      MINIO_BUCKET: ${MINIO_BUCKET:-swanlab-media}
 
       # Python配置
       PYTHONPATH: /app
@@ -49,6 +51,10 @@ services:
       - swanlab_data:/app/data
       - swanlab_logs:/app/logs
       - swanlab_storage:/data
+      - mysql_data:/var/lib/mysql
+      - clickhouse_data:/var/lib/clickhouse
+      - redis_data:/var/lib/redis
+      - minio_data:/data/minio
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5173/api/v1/cloud/health"]
       interval: 30s
@@ -62,4 +68,12 @@ volumes:
   swanlab_logs:
     driver: local
   swanlab_storage:
+    driver: local
+  mysql_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
     driver: local
