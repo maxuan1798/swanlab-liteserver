@@ -30,10 +30,23 @@ mkdir -p /var/log/supervisor /var/run/supervisor
 mkdir -p /var/log/nginx /var/run/nginx
 mkdir -p /var/log/fluent-bit /data/fluent-bit
 
+# 创建 ClickHouse 所需的所有子目录
+echo "📁 Creating ClickHouse directories..."
+mkdir -p /var/lib/clickhouse/{data,metadata,tmp,user_files,access,format_schemas,user_scripts}
+mkdir -p /var/lib/clickhouse/data/default
+mkdir -p /var/lib/clickhouse/metadata/default
+mkdir -p /var/lib/clickhouse/store
+
 # 设置基本权限
 echo "🔐 Setting permissions..."
 chown -R mysql:mysql /var/lib/mysql /var/log/mysql 2>/dev/null || true
 chown -R redis:redis /var/lib/redis /var/log/redis 2>/dev/null || true
+
+# 设置 ClickHouse 权限（在创建配置文件之前）
+echo "🔐 Setting ClickHouse permissions..."
+chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /var/run/clickhouse-server 2>/dev/null || true
+chmod -R 755 /var/lib/clickhouse
+chmod -R 755 /var/log/clickhouse-server
 
 # 初始化MySQL (如果需要)
 MYSQL_NEEDS_INIT=false
@@ -200,27 +213,35 @@ else
 fi
 
 # 初始化ClickHouse目录和配置
-if [ ! -d "/var/lib/clickhouse/data" ]; then
+if [ ! -f "/etc/clickhouse-server/config.xml" ] || [ ! -d "/var/lib/clickhouse/data/default" ]; then
     echo "🔄 Initializing ClickHouse..."
-    mkdir -p /var/lib/clickhouse/{data,metadata,tmp,user_files,access}
-    
+
     # 创建最小的ClickHouse配置
     cat > /etc/clickhouse-server/config.xml << 'EOF'
 <?xml version="1.0"?>
 <clickhouse>
     <logger>
-        <level>warning</level>
+        <level>information</level>
         <log>/var/log/clickhouse-server/clickhouse-server.log</log>
         <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+        <size>1000M</size>
+        <count>10</count>
     </logger>
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>
     <listen_host>0.0.0.0</listen_host>
     <path>/var/lib/clickhouse/</path>
     <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+    <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+    <access_control_path>/var/lib/clickhouse/access/</access_control_path>
+    <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
     <users_config>users.xml</users_config>
     <default_profile>default</default_profile>
     <default_database>default</default_database>
+    <mlock_executable>false</mlock_executable>
+    <max_concurrent_queries>100</max_concurrent_queries>
+    <max_server_memory_usage>0</max_server_memory_usage>
+    <max_server_memory_usage_to_ram_ratio>0.9</max_server_memory_usage_to_ram_ratio>
 </clickhouse>
 EOF
 
@@ -230,36 +251,46 @@ EOF
     <profiles>
         <default>
             <max_memory_usage>10000000000</max_memory_usage>
+            <use_uncompressed_cache>0</use_uncompressed_cache>
+            <load_balancing>random</load_balancing>
         </default>
     </profiles>
     <users>
         <default>
             <password>${CLICKHOUSE_PASSWORD}</password>
-            <networks incl="networks" replace="replace">
+            <networks>
                 <ip>::/0</ip>
             </networks>
             <profile>default</profile>
             <quota>default</quota>
+            <access_management>1</access_management>
         </default>
     </users>
     <quotas>
         <default>
             <interval>
                 <duration>3600</duration>
+                <queries>0</queries>
+                <errors>0</errors>
+                <result_rows>0</result_rows>
+                <read_rows>0</read_rows>
+                <execution_time>0</execution_time>
             </interval>
         </default>
     </quotas>
 </clickhouse>
 EOF
 
-    # 设置所有ClickHouse相关目录的权限
-    chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /var/run/clickhouse-server 2>/dev/null || true
-    echo "✅ ClickHouse initialized"
-fi
+    # 设置配置文件权限
+    chown clickhouse:clickhouse /etc/clickhouse-server/config.xml /etc/clickhouse-server/users.xml
+    chmod 644 /etc/clickhouse-server/config.xml /etc/clickhouse-server/users.xml
 
-# 确保ClickHouse权限正确（即使目录已存在）
-echo "🔐 Setting ClickHouse permissions..."
-chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /var/run/clickhouse-server 2>/dev/null || true
+    # 再次确保所有 ClickHouse 目录权限正确
+    chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /var/run/clickhouse-server
+    chmod -R 755 /var/lib/clickhouse
+
+    echo "✅ ClickHouse configuration created"
+fi
 
 # 始终更新ClickHouse用户密码（防止密码不一致）
 echo "🔐 Updating ClickHouse password from environment..."
@@ -270,52 +301,88 @@ if [ -f "/etc/clickhouse-server/users.xml" ]; then
     <profiles>
         <default>
             <max_memory_usage>10000000000</max_memory_usage>
+            <use_uncompressed_cache>0</use_uncompressed_cache>
+            <load_balancing>random</load_balancing>
         </default>
     </profiles>
     <users>
         <default>
             <password>${CLICKHOUSE_PASSWORD}</password>
-            <networks incl="networks" replace="replace">
+            <networks>
                 <ip>::/0</ip>
             </networks>
             <profile>default</profile>
             <quota>default</quota>
+            <access_management>1</access_management>
         </default>
     </users>
     <quotas>
         <default>
             <interval>
                 <duration>3600</duration>
+                <queries>0</queries>
+                <errors>0</errors>
+                <result_rows>0</result_rows>
+                <read_rows>0</read_rows>
+                <execution_time>0</execution_time>
             </interval>
         </default>
     </quotas>
 </clickhouse>
 EOF
-    chown clickhouse:clickhouse /etc/clickhouse-server/users.xml 2>/dev/null || true
+    chown clickhouse:clickhouse /etc/clickhouse-server/users.xml
+    chmod 644 /etc/clickhouse-server/users.xml
     echo "✅ ClickHouse password updated"
+fi
+
+# 验证 ClickHouse 配置和权限
+echo "🔍 Verifying ClickHouse setup..."
+echo "  - Config file: $(test -f /etc/clickhouse-server/config.xml && echo '✅' || echo '❌')"
+echo "  - Users file: $(test -f /etc/clickhouse-server/users.xml && echo '✅' || echo '❌')"
+echo "  - Data directory: $(test -d /var/lib/clickhouse/data && echo '✅' || echo '❌')"
+echo "  - Log directory: $(test -d /var/log/clickhouse-server && echo '✅' || echo '❌')"
+ls -la /etc/clickhouse-server/ 2>/dev/null || echo "  ⚠️  Cannot list /etc/clickhouse-server/"
+ls -la /var/lib/clickhouse/ 2>/dev/null || echo "  ⚠️  Cannot list /var/lib/clickhouse/"
+
+# 测试 ClickHouse 配置语法
+echo "🔧 Testing ClickHouse configuration..."
+if su - clickhouse -s /bin/bash -c "/usr/bin/clickhouse-server --config-file=/etc/clickhouse-server/config.xml --test" 2>&1 | tee /tmp/clickhouse-test.log; then
+    echo "✅ ClickHouse configuration is valid"
+else
+    echo "❌ ClickHouse configuration test failed:"
+    cat /tmp/clickhouse-test.log
+    echo "⚠️  Continuing anyway, will try to start..."
 fi
 
 # 启动ClickHouse进行初始化
 echo "🚀 Starting ClickHouse for initialization..."
-runuser -u clickhouse -- /usr/bin/clickhouse-server --config-file=/etc/clickhouse-server/config.xml --daemon
+su - clickhouse -s /bin/bash -c "/usr/bin/clickhouse-server --config-file=/etc/clickhouse-server/config.xml --daemon --pid-file=/var/run/clickhouse-server/clickhouse-server.pid" 2>&1 | tee /tmp/clickhouse-start.log &
 CLICKHOUSE_PID=$!
 
 # 等待ClickHouse启动
 echo "⏳ Waiting for ClickHouse to be ready..."
 CLICKHOUSE_STARTED=false
 for i in {1..60}; do
-    if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" --query "SELECT 1" 2>/dev/null; then
+    # 先检查进程是否还在运行
+    if ! pgrep -f clickhouse-server >/dev/null 2>&1; then
+        echo "❌ ClickHouse process not running, checking logs..."
+        echo "=== ClickHouse error log ==="
+        tail -n 50 /var/log/clickhouse-server/clickhouse-server.err.log 2>/dev/null || echo "No error log available"
+        echo "=== ClickHouse main log ==="
+        tail -n 50 /var/log/clickhouse-server/clickhouse-server.log 2>/dev/null || echo "No main log available"
+        break
+    fi
+
+    if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" --query "SELECT 1" >/dev/null 2>&1; then
         echo "✅ ClickHouse is ready"
         CLICKHOUSE_STARTED=true
         break
     fi
-    # 检查进程是否还在运行
-    if ! kill -0 $CLICKHOUSE_PID 2>/dev/null; then
-        echo "❌ ClickHouse process died during startup"
-        break
-    fi
+
     if [ $i -eq 60 ]; then
         echo "❌ ClickHouse failed to start in time"
+        echo "=== Recent ClickHouse logs ==="
+        tail -n 100 /var/log/clickhouse-server/clickhouse-server.log 2>/dev/null || echo "No log available"
         break
     fi
     sleep 2
@@ -325,10 +392,11 @@ done
 if [ "$CLICKHOUSE_STARTED" = true ]; then
     echo "📝 Running ClickHouse initialization script..."
     if [ -f "/etc/clickhouse-server/init/init.sql" ]; then
-        if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" < /etc/clickhouse-server/init/init.sql 2>/dev/null; then
+        if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" < /etc/clickhouse-server/init/init.sql 2>&1 | tee /tmp/clickhouse-init.log; then
             echo "✅ ClickHouse initialization completed"
         else
             echo "⚠️  ClickHouse initialization had errors (may be normal if already exists)"
+            cat /tmp/clickhouse-init.log
         fi
     else
         echo "⚠️  ClickHouse init script not found at /etc/clickhouse-server/init/init.sql"
@@ -336,20 +404,15 @@ if [ "$CLICKHOUSE_STARTED" = true ]; then
 
     # 停止ClickHouse初始化实例
     echo "🛑 Stopping ClickHouse initialization instance..."
-    if kill -0 $CLICKHOUSE_PID 2>/dev/null; then
-        kill $CLICKHOUSE_PID
-        wait $CLICKHOUSE_PID 2>/dev/null || true
-        echo "✅ ClickHouse initialization instance stopped"
-    else
-        echo "⚠️  ClickHouse process already terminated"
-    fi
+    pkill -f clickhouse-server || true
+    sleep 2
+    echo "✅ ClickHouse initialization instance stopped"
 else
     echo "⚠️  Skipping ClickHouse initialization due to startup failure"
     # 确保进程被清理
-    if kill -0 $CLICKHOUSE_PID 2>/dev/null; then
-        kill $CLICKHOUSE_PID 2>/dev/null || true
-    fi
+    pkill -f clickhouse-server 2>/dev/null || true
 fi
 
 echo "🚀 Starting supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+
