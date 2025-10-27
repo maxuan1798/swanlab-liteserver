@@ -302,36 +302,54 @@ CLICKHOUSE_PID=$!
 
 # 等待ClickHouse启动
 echo "⏳ Waiting for ClickHouse to be ready..."
+CLICKHOUSE_STARTED=false
 for i in {1..60}; do
     if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" --query "SELECT 1" 2>/dev/null; then
         echo "✅ ClickHouse is ready"
+        CLICKHOUSE_STARTED=true
+        break
+    fi
+    # 检查进程是否还在运行
+    if ! kill -0 $CLICKHOUSE_PID 2>/dev/null; then
+        echo "❌ ClickHouse process died during startup"
         break
     fi
     if [ $i -eq 60 ]; then
-        echo "❌ ClickHouse failed to start in time, continuing anyway..."
-        echo "⚠️  ClickHouse initialization will be skipped"
-        kill $CLICKHOUSE_PID 2>/dev/null || true
+        echo "❌ ClickHouse failed to start in time"
         break
     fi
     sleep 2
 done
 
-# 执行ClickHouse初始化脚本
-echo "📝 Running ClickHouse initialization script..."
-if [ -f "/etc/clickhouse-server/init/init.sql" ]; then
-    if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" < /etc/clickhouse-server/init/init.sql 2>/dev/null; then
-        echo "✅ ClickHouse initialization completed"
+# 只有在ClickHouse成功启动时才执行初始化脚本
+if [ "$CLICKHOUSE_STARTED" = true ]; then
+    echo "📝 Running ClickHouse initialization script..."
+    if [ -f "/etc/clickhouse-server/init/init.sql" ]; then
+        if clickhouse-client --user default --password "${CLICKHOUSE_PASSWORD}" < /etc/clickhouse-server/init/init.sql 2>/dev/null; then
+            echo "✅ ClickHouse initialization completed"
+        else
+            echo "⚠️  ClickHouse initialization had errors (may be normal if already exists)"
+        fi
     else
-        echo "⚠️  ClickHouse initialization had errors (may be normal if already exists)"
+        echo "⚠️  ClickHouse init script not found at /etc/clickhouse-server/init/init.sql"
+    fi
+
+    # 停止ClickHouse初始化实例
+    echo "🛑 Stopping ClickHouse initialization instance..."
+    if kill -0 $CLICKHOUSE_PID 2>/dev/null; then
+        kill $CLICKHOUSE_PID
+        wait $CLICKHOUSE_PID 2>/dev/null || true
+        echo "✅ ClickHouse initialization instance stopped"
+    else
+        echo "⚠️  ClickHouse process already terminated"
     fi
 else
-    echo "⚠️  ClickHouse init script not found at /etc/clickhouse-server/init/init.sql"
+    echo "⚠️  Skipping ClickHouse initialization due to startup failure"
+    # 确保进程被清理
+    if kill -0 $CLICKHOUSE_PID 2>/dev/null; then
+        kill $CLICKHOUSE_PID 2>/dev/null || true
+    fi
 fi
-
-# 停止ClickHouse初始化实例
-echo "🛑 Stopping ClickHouse initialization instance..."
-kill $CLICKHOUSE_PID
-wait $CLICKHOUSE_PID 2>/dev/null || true
 
 echo "🚀 Starting supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
