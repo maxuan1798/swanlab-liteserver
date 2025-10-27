@@ -23,7 +23,7 @@ from .middleware.common import (
 # 响应路径
 from .settings import ASSETS
 
-# 加载 .env 文件
+# 加载 .env_test 文件
 load_dotenv()
 
 # 导入数据库连接管理器

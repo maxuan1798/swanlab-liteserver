@@ -2,21 +2,25 @@
 -- 此脚本在MySQL容器首次启动时自动执行
 
 -- 创建SwanLab云端数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS swanlab_cloud
+CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE:-swanlab_cloud}
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
 -- 创建SwanLab用户（如果不存在）
-CREATE USER IF NOT EXISTS 'swanlab_user'@'%' IDENTIFIED BY 'swanlab_user_456';
+CREATE USER IF NOT EXISTS '${MYSQL_USER:-swanlab_user}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD:-swanlab_user_456}';
+CREATE USER IF NOT EXISTS '${MYSQL_USER:-swanlab_user}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD:-swanlab_user_456}';
+CREATE USER IF NOT EXISTS '${MYSQL_USER:-swanlab_user}'@'127.0.0.1' IDENTIFIED BY '${MYSQL_PASSWORD:-swanlab_user_456}';
 
 -- 授予权限
-GRANT ALL PRIVILEGES ON swanlab_cloud.* TO 'swanlab_user'@'%';
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE:-swanlab_cloud}.* TO '${MYSQL_USER:-swanlab_user}'@'%';
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE:-swanlab_cloud}.* TO '${MYSQL_USER:-swanlab_user}'@'localhost';
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE:-swanlab_cloud}.* TO '${MYSQL_USER:-swanlab_user}'@'127.0.0.1';
 
 -- 刷新权限
 FLUSH PRIVILEGES;
 
 -- 使用SwanLab数据库
-USE swanlab_cloud;
+USE ${MYSQL_DATABASE:-swanlab_cloud};
 
 -- 创建云端项目表
 CREATE TABLE IF NOT EXISTS cloud_projects (
@@ -162,4 +166,4 @@ INSERT IGNORE INTO cloud_projects (id, name, description, workspace, owner, visi
 SHOW TABLES;
 
 -- 显示权限
-SHOW GRANTS FOR 'swanlab_user'@'%';
+SHOW GRANTS FOR '${MYSQL_USER:-swanlab_user}'@'%';

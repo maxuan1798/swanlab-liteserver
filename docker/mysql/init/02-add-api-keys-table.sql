@@ -2,7 +2,7 @@
 -- This script adds the api_keys table for platform-level API key management
 -- Created: 2025-01-23
 
-USE swanlab_cloud;
+USE ${MYSQL_DATABASE:-swanlab_cloud};
 
 -- 创建 API Keys 表
 CREATE TABLE IF NOT EXISTS api_keys (

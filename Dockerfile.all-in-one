@@ -112,7 +112,7 @@ RUN npm install && npm run build
 RUN mkdir -p /app/data /app/logs
 
 # 复制配置文件从 docker/ 文件夹到系统目录
-# Supervisor 配置和启动脚本 (使用简化版本)
+# Supervisor 配置和启动脚本
 RUN cp /app/docker/supervisor-simple.conf /etc/supervisor/conf.d/supervisord.conf && \
     cp /app/docker/start-services-simple.sh /start-services.sh && \
     chmod +x /start-services.sh
@@ -120,9 +120,17 @@ RUN cp /app/docker/supervisor-simple.conf /etc/supervisor/conf.d/supervisord.con
 # MySQL 配置和初始化脚本
 RUN if [ -f /app/docker/mysql/conf.d/mysql.cnf ]; then \
         cp /app/docker/mysql/conf.d/mysql.cnf /etc/mysql/mysql.conf.d/mysql.cnf; \
-    fi && \
-    if [ -d /app/docker/mysql/init ]; then \
-        cp -r /app/docker/mysql/init/* /docker-entrypoint-initdb.d/ 2>/dev/null || true; \
+    fi
+
+# 复制MySQL初始化脚本（必须成功）
+RUN if [ -d /app/docker/mysql/init ]; then \
+        echo "Copying MySQL init scripts..." && \
+        ls -la /app/docker/mysql/init/ && \
+        cp /app/docker/mysql/init/*.sql /docker-entrypoint-initdb.d/ && \
+        echo "Init scripts copied successfully:" && \
+        ls -la /docker-entrypoint-initdb.d/; \
+    else \
+        echo "ERROR: MySQL init directory not found!" && exit 1; \
     fi
 
 # ClickHouse 配置和初始化脚本
@@ -161,22 +169,15 @@ ENV PYTHONUNBUFFERED=1
 ENV SWANLAB_LOG_DIR=/app/logs
 ENV SWANLAB_DATA_DIR=/app/data
 
-# MySQL环境变量
-ENV MYSQL_ROOT_PASSWORD=swanlab123
+# MySQL环境变量 (密码通过docker-compose设置)
 ENV MYSQL_DATABASE=swanlab_cloud
 ENV MYSQL_USER=swanlab_user
-ENV MYSQL_PASSWORD=swanlab456
 
-# ClickHouse环境变量
+# ClickHouse环境变量 (密码通过docker-compose设置)
 ENV CLICKHOUSE_USER=default
-ENV CLICKHOUSE_PASSWORD=password123
 
-# MinIO环境变量
+# MinIO环境变量 (密码通过docker-compose设置)
 ENV MINIO_ROOT_USER=minioadmin
-ENV MINIO_ROOT_PASSWORD=minioadmin
-
-# Redis环境变量
-ENV REDIS_PASSWORD=""
 
 # SwanLab环境变量
 ENV SWANLAB_CLOUD_SYNC=1
@@ -186,26 +187,11 @@ ENV CLICKHOUSE_HOST=localhost
 ENV CLICKHOUSE_PORT=9000
 ENV REDIS_HOST=localhost
 ENV REDIS_PORT=6379
-ENV MINIO_ENDPOINT=http://localhost:9000
-ENV MINIO_ACCESS_KEY=minioadmin
-ENV MINIO_SECRET_KEY=minioadmin
+ENV MINIO_ENDPOINT=http://localhost:9002
 ENV MINIO_BUCKET=swanlab
 
-# 暴露端口
-# SwanLab服务器
-EXPOSE 5173
-# MySQL
-EXPOSE 3306
-# ClickHouse HTTP
-EXPOSE 8123
-# ClickHouse Native / MinIO API
-EXPOSE 9000
-# MinIO Console
-EXPOSE 9001
-# Redis
-EXPOSE 6379
 # Nginx
-EXPOSE 80
+EXPOSE 8800
 
 # 数据卷
 VOLUME ["/app/data", "/app/logs", "/data"]

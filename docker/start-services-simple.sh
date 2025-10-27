@@ -34,15 +34,108 @@ chown -R mysql:mysql /var/lib/mysql /var/log/mysql 2>/dev/null || true
 chown -R redis:redis /var/lib/redis /var/log/redis 2>/dev/null || true
 
 # 初始化MySQL (如果需要)
+MYSQL_NEEDS_INIT=false
+MYSQL_DATA_EXISTS=false
+
 if [ ! -d "/var/lib/mysql/mysql" ]; then
-    echo "🔄 Initializing MySQL database..."
+    echo "🔄 MySQL data directory not found, initializing MySQL..."
+    MYSQL_NEEDS_INIT=true
+
+    # 初始化MySQL数据库
     mysqld --initialize-insecure --user=mysql --datadir=/var/lib/mysql
-    echo "✅ MySQL initialized"
+else
+    echo "ℹ️  MySQL data directory exists, checking if SwanLab database is initialized..."
+    MYSQL_DATA_EXISTS=true
 fi
 
-# 创建最小的nginx配置
-echo "📝 Creating simple nginx config..."
-cat > /etc/nginx/nginx.conf << 'EOF'
+# 启动MySQL临时实例（用于初始化或迁移）
+echo "🔧 Starting temporary MySQL instance..."
+mysqld --user=mysql --datadir=/var/lib/mysql --skip-networking --socket=/var/run/mysqld/mysqld.sock &
+MYSQL_PID=$!
+
+# 等待MySQL启动（使用重试机制）
+echo "⏳ Waiting for MySQL to be ready..."
+for i in {1..30}; do
+    if mysql -S /var/run/mysqld/mysqld.sock -u root -e "SELECT 1" >/dev/null 2>&1; then
+        echo "✅ MySQL is ready"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "❌ MySQL failed to start in time"
+        kill $MYSQL_PID 2>/dev/null || true
+        exit 1
+    fi
+    sleep 1
+done
+
+# 设置环境变量默认值
+export MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-swanlab_root_123}"
+export MYSQL_DATABASE="${MYSQL_DATABASE:-swanlab_cloud}"
+export MYSQL_USER="${MYSQL_USER:-swanlab_user}"
+export MYSQL_PASSWORD="${MYSQL_PASSWORD:-swanlab_user_456}"
+
+# 检查SwanLab数据库是否需要初始化
+RUN_INIT_SCRIPTS=false
+if [ "$MYSQL_NEEDS_INIT" = true ]; then
+    echo "📝 New MySQL installation detected, running all initialization scripts..."
+    RUN_INIT_SCRIPTS=true
+elif [ "$MYSQL_DATA_EXISTS" = true ]; then
+    # 检查SwanLab数据库是否存在
+    if ! mysql -S /var/run/mysqld/mysqld.sock -u root -e "USE ${MYSQL_DATABASE}" 2>/dev/null; then
+        echo "📝 SwanLab database '${MYSQL_DATABASE}' not found, running initialization scripts..."
+        RUN_INIT_SCRIPTS=true
+    else
+        # 检查关键表是否存在
+        TABLE_COUNT=$(mysql -S /var/run/mysqld/mysqld.sock -u root -D "${MYSQL_DATABASE}" -e "SHOW TABLES LIKE 'cloud_projects'" 2>/dev/null | wc -l)
+        if [ "$TABLE_COUNT" -lt 2 ]; then
+            echo "📝 SwanLab tables not found, running initialization scripts..."
+            RUN_INIT_SCRIPTS=true
+        else
+            echo "✅ SwanLab database is already initialized, skipping init scripts"
+            # 仍然检查api_keys表（可能是新增的）
+            API_KEYS_EXISTS=$(mysql -S /var/run/mysqld/mysqld.sock -u root -D "${MYSQL_DATABASE}" -e "SHOW TABLES LIKE 'api_keys'" 2>/dev/null | wc -l)
+            if [ "$API_KEYS_EXISTS" -lt 2 ]; then
+                echo "📝 Running 02-add-api-keys-table.sql migration..."
+                if [ -f "/docker-entrypoint-initdb.d/02-add-api-keys-table.sql" ]; then
+                    eval "echo \"$(cat /docker-entrypoint-initdb.d/02-add-api-keys-table.sql)\"" | mysql -S /var/run/mysqld/mysqld.sock -u root
+                    echo "✅ API keys table migration completed"
+                fi
+            fi
+        fi
+    fi
+fi
+
+# 执行初始化脚本
+if [ "$RUN_INIT_SCRIPTS" = true ] && [ -d "/docker-entrypoint-initdb.d" ]; then
+    echo "📝 Running MySQL initialization scripts..."
+    for sql_file in /docker-entrypoint-initdb.d/*.sql; do
+        if [ -f "$sql_file" ]; then
+            echo "  - Executing: $(basename "$sql_file")"
+            # 使用 eval echo 进行环境变量替换，然后传递给 mysql
+            if eval "echo \"$(cat "$sql_file")\"" | mysql -S /var/run/mysqld/mysqld.sock -u root 2>&1; then
+                echo "    ✅ Success: $(basename "$sql_file")"
+            else
+                echo "    ⚠️  Warning: $(basename "$sql_file") had errors (may be normal if already exists)"
+            fi
+        fi
+    done
+    echo "✅ MySQL initialization completed"
+fi
+
+# 停止临时MySQL实例
+echo "🛑 Stopping temporary MySQL instance..."
+kill $MYSQL_PID
+wait $MYSQL_PID 2>/dev/null || true
+
+# 使用nginx-all-in-one.conf配置
+echo "📝 Copying nginx-all-in-one config..."
+if [ -f "/app/docker/nginx/nginx-all-in-one.conf" ]; then
+    cp /app/docker/nginx/nginx-all-in-one.conf /etc/nginx/nginx.conf
+    echo "✅ Nginx config copied from nginx-all-in-one.conf"
+else
+    echo "⚠️  nginx-all-in-one.conf not found, using default config"
+    # 如果找不到配置文件，使用简单的回退配置
+    cat > /etc/nginx/nginx.conf << 'EOF'
 user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
@@ -64,7 +157,7 @@ http {
     error_log /var/log/nginx/error.log;
 
     server {
-        listen 80 default_server;
+        listen 8800 default_server;
         server_name _;
 
         location /health {
@@ -81,6 +174,7 @@ http {
     }
 }
 EOF
+fi
 
 # 测试nginx配置
 echo "🔧 Testing nginx configuration..."
