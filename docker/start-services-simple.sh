@@ -73,6 +73,8 @@ export MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-swanlab_root_123}"
 export MYSQL_DATABASE="${MYSQL_DATABASE:-swanlab_cloud}"
 export MYSQL_USER="${MYSQL_USER:-swanlab_user}"
 export MYSQL_PASSWORD="${MYSQL_PASSWORD:-swanlab_user_456}"
+export CLICKHOUSE_USER="${CLICKHOUSE_USER:-default}"
+export CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-password123}"
 
 # 检查SwanLab数据库是否需要初始化
 RUN_INIT_SCRIPTS=false
@@ -211,7 +213,7 @@ if [ ! -d "/var/lib/clickhouse/data" ]; then
 </clickhouse>
 EOF
 
-    cat > /etc/clickhouse-server/users.xml << 'EOF'
+    cat > /etc/clickhouse-server/users.xml << EOF
 <?xml version="1.0"?>
 <clickhouse>
     <profiles>
@@ -221,7 +223,7 @@ EOF
     </profiles>
     <users>
         <default>
-            <password></password>
+            <password>${CLICKHOUSE_PASSWORD}</password>
             <networks incl="networks" replace="replace">
                 <ip>::/0</ip>
             </networks>
@@ -247,6 +249,40 @@ fi
 # 确保ClickHouse权限正确（即使目录已存在）
 echo "🔐 Setting ClickHouse permissions..."
 chown -R clickhouse:clickhouse /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /var/run/clickhouse-server 2>/dev/null || true
+
+# 始终更新ClickHouse用户密码（防止密码不一致）
+echo "🔐 Updating ClickHouse password from environment..."
+if [ -f "/etc/clickhouse-server/users.xml" ]; then
+    cat > /etc/clickhouse-server/users.xml << EOF
+<?xml version="1.0"?>
+<clickhouse>
+    <profiles>
+        <default>
+            <max_memory_usage>10000000000</max_memory_usage>
+        </default>
+    </profiles>
+    <users>
+        <default>
+            <password>${CLICKHOUSE_PASSWORD}</password>
+            <networks incl="networks" replace="replace">
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+        </default>
+    </users>
+    <quotas>
+        <default>
+            <interval>
+                <duration>3600</duration>
+            </interval>
+        </default>
+    </quotas>
+</clickhouse>
+EOF
+    chown clickhouse:clickhouse /etc/clickhouse-server/users.xml 2>/dev/null || true
+    echo "✅ ClickHouse password updated"
+fi
 
 echo "🚀 Starting supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
