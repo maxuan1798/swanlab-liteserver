@@ -12,21 +12,23 @@ echo "- Available Disk: $(df -h / | tail -1 | awk '{print $4}')"
 # 检查服务是否安装
 echo "🔍 Checking installed services:"
 command -v mysql >/dev/null 2>&1 && echo "  ✅ MySQL" || echo "  ❌ MySQL"
-command -v clickhouse-server >/dev/null 2>&1 && echo "  ✅ ClickHouse" || echo "  ❌ ClickHouse" 
+command -v clickhouse-server >/dev/null 2>&1 && echo "  ✅ ClickHouse" || echo "  ❌ ClickHouse"
 command -v redis-server >/dev/null 2>&1 && echo "  ✅ Redis" || echo "  ❌ Redis"
 command -v nginx >/dev/null 2>&1 && echo "  ✅ Nginx" || echo "  ❌ Nginx"
 command -v minio >/dev/null 2>&1 && echo "  ✅ MinIO" || echo "  ❌ MinIO"
+test -f /opt/fluent-bit/bin/fluent-bit && echo "  ✅ Fluent Bit" || echo "  ❌ Fluent Bit"
 
 # 创建必要的目录和设置权限
 echo "📁 Creating directories..."
-mkdir -p /var/lib/mysql /var/log/mysql 
+mkdir -p /var/lib/mysql /var/log/mysql
 mkdir -p /var/lib/redis /var/log/redis
 mkdir -p /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server
 mkdir -p /var/run/clickhouse-server
 mkdir -p /data/minio /var/log/minio
-mkdir -p /app/data /app/logs 
+mkdir -p /app/data /app/logs
 mkdir -p /var/log/supervisor /var/run/supervisor
 mkdir -p /var/log/nginx /var/run/nginx
+mkdir -p /var/log/fluent-bit /data/fluent-bit
 
 # 设置基本权限
 echo "🔐 Setting permissions..."
@@ -48,6 +50,14 @@ else
     MYSQL_DATA_EXISTS=true
 fi
 
+# 设置环境变量默认值（在启动服务之前设置）
+export MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-swanlab_root_123}"
+export MYSQL_DATABASE="${MYSQL_DATABASE:-swanlab_cloud}"
+export MYSQL_USER="${MYSQL_USER:-swanlab_user}"
+export MYSQL_PASSWORD="${MYSQL_PASSWORD:-swanlab_user_456}"
+export CLICKHOUSE_USER="${CLICKHOUSE_USER:-default}"
+export CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-password123}"
+
 # 启动MySQL临时实例（用于初始化或迁移）
 echo "🔧 Starting temporary MySQL instance..."
 mysqld --user=mysql --datadir=/var/lib/mysql --skip-networking --socket=/var/run/mysqld/mysqld.sock &
@@ -56,7 +66,9 @@ MYSQL_PID=$!
 # 等待MySQL启动（使用重试机制）
 echo "⏳ Waiting for MySQL to be ready..."
 for i in {1..30}; do
-    if mysql -S /var/run/mysqld/mysqld.sock -u root -e "SELECT 1" >/dev/null 2>&1; then
+    # 尝试无密码连接（新安装）或有密码连接（已存在数据）
+    if mysql -S /var/run/mysqld/mysqld.sock -u root -e "SELECT 1" >/dev/null 2>&1 || \
+       mysql -S /var/run/mysqld/mysqld.sock -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1" >/dev/null 2>&1; then
         echo "✅ MySQL is ready"
         break
     fi
@@ -68,13 +80,12 @@ for i in {1..30}; do
     sleep 1
 done
 
-# 设置环境变量默认值
-export MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-swanlab_root_123}"
-export MYSQL_DATABASE="${MYSQL_DATABASE:-swanlab_cloud}"
-export MYSQL_USER="${MYSQL_USER:-swanlab_user}"
-export MYSQL_PASSWORD="${MYSQL_PASSWORD:-swanlab_user_456}"
-export CLICKHOUSE_USER="${CLICKHOUSE_USER:-default}"
-export CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-password123}"
+# 确定使用哪种认证方式
+MYSQL_CMD="mysql -S /var/run/mysqld/mysqld.sock -u root"
+if ! mysql -S /var/run/mysqld/mysqld.sock -u root -e "SELECT 1" >/dev/null 2>&1; then
+    # 需要密码认证
+    MYSQL_CMD="mysql -S /var/run/mysqld/mysqld.sock -u root -p${MYSQL_ROOT_PASSWORD}"
+fi
 
 # 检查SwanLab数据库是否需要初始化
 RUN_INIT_SCRIPTS=false
@@ -83,23 +94,23 @@ if [ "$MYSQL_NEEDS_INIT" = true ]; then
     RUN_INIT_SCRIPTS=true
 elif [ "$MYSQL_DATA_EXISTS" = true ]; then
     # 检查SwanLab数据库是否存在
-    if ! mysql -S /var/run/mysqld/mysqld.sock -u root -e "USE ${MYSQL_DATABASE}" 2>/dev/null; then
+    if ! ${MYSQL_CMD} -e "USE ${MYSQL_DATABASE}" 2>/dev/null; then
         echo "📝 SwanLab database '${MYSQL_DATABASE}' not found, running initialization scripts..."
         RUN_INIT_SCRIPTS=true
     else
         # 检查关键表是否存在
-        TABLE_COUNT=$(mysql -S /var/run/mysqld/mysqld.sock -u root -D "${MYSQL_DATABASE}" -e "SHOW TABLES LIKE 'cloud_projects'" 2>/dev/null | wc -l)
+        TABLE_COUNT=$(${MYSQL_CMD} -D "${MYSQL_DATABASE}" -e "SHOW TABLES LIKE 'cloud_projects'" 2>/dev/null | wc -l)
         if [ "$TABLE_COUNT" -lt 2 ]; then
             echo "📝 SwanLab tables not found, running initialization scripts..."
             RUN_INIT_SCRIPTS=true
         else
             echo "✅ SwanLab database is already initialized, skipping init scripts"
             # 仍然检查api_keys表（可能是新增的）
-            API_KEYS_EXISTS=$(mysql -S /var/run/mysqld/mysqld.sock -u root -D "${MYSQL_DATABASE}" -e "SHOW TABLES LIKE 'api_keys'" 2>/dev/null | wc -l)
+            API_KEYS_EXISTS=$(${MYSQL_CMD} -D "${MYSQL_DATABASE}" -e "SHOW TABLES LIKE 'api_keys'" 2>/dev/null | wc -l)
             if [ "$API_KEYS_EXISTS" -lt 2 ]; then
                 echo "📝 Running 02-add-api-keys-table.sql migration..."
                 if [ -f "/docker-entrypoint-initdb.d/02-add-api-keys-table.sql" ]; then
-                    eval "echo \"$(cat /docker-entrypoint-initdb.d/02-add-api-keys-table.sql)\"" | mysql -S /var/run/mysqld/mysqld.sock -u root
+                    eval "echo \"$(cat /docker-entrypoint-initdb.d/02-add-api-keys-table.sql)\"" | ${MYSQL_CMD}
                     echo "✅ API keys table migration completed"
                 fi
             fi
@@ -114,7 +125,7 @@ if [ "$RUN_INIT_SCRIPTS" = true ] && [ -d "/docker-entrypoint-initdb.d" ]; then
         if [ -f "$sql_file" ]; then
             echo "  - Executing: $(basename "$sql_file")"
             # 使用 eval echo 进行环境变量替换，然后传递给 mysql
-            if eval "echo \"$(cat "$sql_file")\"" | mysql -S /var/run/mysqld/mysqld.sock -u root 2>&1; then
+            if eval "echo \"$(cat "$sql_file")\"" | ${MYSQL_CMD} 2>&1; then
                 echo "    ✅ Success: $(basename "$sql_file")"
             else
                 echo "    ⚠️  Warning: $(basename "$sql_file") had errors (may be normal if already exists)"

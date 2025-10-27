@@ -1,11 +1,8 @@
 -- 创建数据库
 CREATE DATABASE IF NOT EXISTS app;
 
--- 切换到 app 数据库
-USE app;
-
 -- 创建日志表
-CREATE TABLE IF NOT EXISTS log (
+CREATE TABLE IF NOT EXISTS app.log (
     timestamp DateTime64(3),
     log_type String,
     run_id String,
@@ -17,7 +14,7 @@ CREATE TABLE IF NOT EXISTS log (
 ORDER BY (run_id, timestamp);
 
 -- 创建运行时信息表
-CREATE TABLE IF NOT EXISTS runtime (
+CREATE TABLE IF NOT EXISTS app.runtime (
     timestamp DateTime64(3),
     log_type String,
     run_id String,
@@ -32,7 +29,7 @@ CREATE TABLE IF NOT EXISTS runtime (
 ORDER BY (run_id, timestamp);
 
 -- 创建列信息表
-CREATE TABLE IF NOT EXISTS column (
+CREATE TABLE IF NOT EXISTS app.column (
     timestamp DateTime64(3),
     log_type String,
     run_id String,
@@ -55,7 +52,7 @@ CREATE TABLE IF NOT EXISTS column (
 ORDER BY (run_id, column_id, timestamp);
 
 -- 创建指标表（支持标量和媒体）
-CREATE TABLE IF NOT EXISTS metric (
+CREATE TABLE IF NOT EXISTS app.metric (
     timestamp DateTime64(3),
     log_type String,
     metric_type String,  -- 'scalar' or 'media'

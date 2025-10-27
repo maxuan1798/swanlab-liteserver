@@ -19,6 +19,7 @@ services:
       # ClickHouse配置
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-password123}
+      CLICKHOUSE_PASS: ${CLICKHOUSE_PASSWORD:-password123}
 
       # MinIO配置
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -55,6 +56,7 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - redis_data:/var/lib/redis
       - minio_data:/data/minio
+      - fluent_bit_data:/data/fluent-bit
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5173/api/v1/cloud/health"]
       interval: 30s
@@ -76,4 +78,6 @@ volumes:
   redis_data:
     driver: local
   minio_data:
+    driver: local
+  fluent_bit_data:
     driver: local

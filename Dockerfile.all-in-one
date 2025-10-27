@@ -71,6 +71,13 @@ RUN wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /usr/local/
     wget https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && \
     chmod +x /usr/local/bin/mc
 
+# 安装Fluent Bit (使用官方仓库)
+RUN curl https://packages.fluentbit.io/fluentbit.key | gpg --dearmor -o /usr/share/keyrings/fluentbit-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/fluentbit-keyring.gpg] https://packages.fluentbit.io/ubuntu/jammy jammy main" | tee /etc/apt/sources.list.d/fluent-bit.list && \
+    apt-get update && \
+    apt-get install -y fluent-bit && \
+    rm -rf /var/lib/apt/lists/*
+
 # 创建必要的目录和设置基本权限
 RUN mkdir -p \
     /var/lib/mysql-files \
