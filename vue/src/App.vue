@@ -48,9 +48,8 @@ const loadProjects = async () => {
         projectStore.setProject(projectDetail.data)
         workspaceStore.setCurrentProject(projectToLoad.id)
       }
-    } else {
-      errorCode.value = 404 // 没有找到项目
     }
+    // 如果没有项目，不设置错误码，允许访问不需要项目的页面（如 API Keys）
   } catch (error) {
     console.error('Failed to load projects:', error)
     errorCode.value = error.response?.data?.code || 3000
@@ -67,8 +66,11 @@ const errorCode = ref(0) // 错误码
 const errorMessage = ref('') // 错误信息
 const route = useRoute()
 
-// 判断是否在项目列表页面，如果是则不显示侧边栏
-const isProjectsPage = computed(() => route.name === 'projects')
+// 判断是否在不需要侧边栏的页面（项目列表、API Keys 等用户级别页面）
+const isProjectsPage = computed(() => {
+  const noSidebarPages = ['projects', 'api-keys', 'help']
+  return noSidebarPages.includes(route.name)
+})
 
 // 监测路由修改
 watch(

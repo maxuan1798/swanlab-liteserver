@@ -99,7 +99,7 @@ const routes = [
   {
     path: '/settings/api-keys',
     name: 'api-keys',
-    component: () => import('@swanlab-vue/views/settings/ApiKeysView.vue')
+    component: () => import('@swanlab-vue/views/api-keys/ApiKeysView.vue')
   },
   {
     path: '/404',

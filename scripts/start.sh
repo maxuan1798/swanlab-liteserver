@@ -34,10 +34,10 @@ check_docker() {
 
 # 检查环境配置文件
 check_env() {
-    if [ ! -f .env ]; then
-        if [ -f .env.example ]; then
+    if [ ! -f .env_test ]; then
+        if [ -f .env_test.example ]; then
             print_message $YELLOW "⚠️  未找到.env文件，正在从.env.example创建..."
-            cp .env.example .env
+            cp .env_test.example .env_test
             print_message $GREEN "✅ 已创建.env文件，请根据需要修改配置"
         else
             print_message $RED "❌ 未找到.env.example文件"
