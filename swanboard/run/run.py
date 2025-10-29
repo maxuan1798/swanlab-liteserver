@@ -84,6 +84,9 @@ class SwanBoardRun:
             }
             connect(**db_config)
             swl.debug("Successfully connected to MySQL database: " + FONT.bold(db_config['database']))
+            # Initialize default project if not exists
+            from swanboard.db import Project
+            Project.init(name="Default Project", description="Default project for SwanLab")
         except Exception as e:
             swl.error("Can not connect to MySQL database: " + FONT.bold(str(e)))
         # ---------------------------------- 日志打印 ----------------------------------

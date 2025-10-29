@@ -22,7 +22,7 @@ class Display(SwanModel):
         # chart_id和namespace_id加起来唯一
         indexes = ((("chart_id", "namespace_id"), True),)
         # 写入check约束，sort必须大于等于0
-        constraints = [Check("sort >= 0")]
+        # constraints = [Check("sort >= 0")]
 
     id = IntegerField(primary_key=True)
     """display表唯一id"""

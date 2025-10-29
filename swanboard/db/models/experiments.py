@@ -42,7 +42,7 @@ class Experiment(SwanModel):
         # 通过meta规定name和project_id的唯一性
         indexes = ((("name", "project_id"), True), (("sort", "project_id"), True))
         # sort必须大于等于0
-        constraints = [Check("sort >= 0")]
+        # constraints = [Check("sort >= 0")]
 
     id = IntegerField(primary_key=True)
     """实验id"""

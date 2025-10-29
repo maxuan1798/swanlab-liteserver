@@ -79,8 +79,12 @@ def get_project_info(project_id: int = DEFAULT_PROJECT_ID) -> dict:
     try:
         # Ensure database connection is established
         db = connect()
+        # Explicitly ensure connection is open
+        if db.is_closed():
+            db.connect()
         project = Project.filter(Project.id == project_id).first()
-        print("project:", project)
+        if project is None:
+            return NOT_FOUND_404(f"Project with id {project_id} not found")
         data = project.__dict__()
         data["logdir"] = get_swanlog_dir()
         experiments = __to_list(project.experiments)

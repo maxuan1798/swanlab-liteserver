@@ -22,12 +22,12 @@ class Chart(SwanModel):
         # 通过meta规定name和project_id的唯一性
         indexes = ((("name", "experiment_id"), True), (("name", "project_id"), True))
 
-        constraints = [
-            # project_id 和 experiment_id 不能同时为空，也不能同时不为空
-            Check(
-                "(project_id IS NULL AND experiment_id IS NOT NULL) OR (project_id IS NOT NULL AND experiment_id IS NULL)"
-            ),
-        ]
+        # constraints = [
+        #     # project_id 和 experiment_id 不能同时为空，也不能同时不为空
+        #     Check(
+        #         "(project_id IS NULL AND experiment_id IS NOT NULL) OR (project_id IS NOT NULL AND experiment_id IS NULL)"
+        #     ),
+        # ]
 
     id = IntegerField(primary_key=True)
     """图表id, 自增"""

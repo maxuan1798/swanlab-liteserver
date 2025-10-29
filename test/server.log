@@ -1,0 +1,8 @@
+DEBUG: connect() called with database=swanlab
+DEBUG temp_db config: {'database': 'swanlab', 'user': 'swanlab', 'password': 'swanlab123', 'host': 'localhost', 'port': 3306}
+DEBUG: Cached db_instance, bound=False
+Try to explore the swanlab experiment logs in: 
+
+               --> [38;5;22mhttp://127.0.0.1:6092[0m
+
+

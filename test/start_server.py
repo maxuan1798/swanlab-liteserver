@@ -1,11 +1,21 @@
 import os
 import uvicorn
 from swanboard.app import app
-from swanboard.db import connect
+from swanboard.db import connect, Project
 from swanboard.utils import FONT
 
-path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "swanlog")
-connect(path=path)
+# 设置数据库连接配置
+db_config = {
+    'database': 'swanlab',
+    'user': 'swanlab',
+    'password': 'swanlab123',
+    'host': 'localhost',
+    'port': 3306,
+    'autocreate': True
+}
+connect(**db_config)
+# Initialize default project
+Project.init(name="Default Project", description="Default project for SwanLab")
 HOST = "0.0.0.0"
 PORT = 6092
 

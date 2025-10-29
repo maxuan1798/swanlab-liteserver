@@ -16,8 +16,13 @@ db_config = None
 全局挂载的数据库配置，用于存储MySQL连接信息
 """
 
+db_instance = None
+"""
+全局缓存的数据库实例，避免重复创建连接
+"""
 
-def connect(database: str = "swanlab", user: str = "swanlab", password: str = "swanlab123", host: str = "host.docker.internal", port: int = 3306, autocreate: bool = False) -> MySQLDatabase:
+
+def connect(database: str = None, user: str = "swanlab", password: str = "swanlab123", host: str = "host.docker.internal", port: int = 3306, autocreate: bool = False) -> MySQLDatabase:
     """
     连接MySQL数据库，只有调用此方法以后，数据库才会被创建，所有导出的类才可用
 
@@ -52,8 +57,12 @@ def connect(database: str = "swanlab", user: str = "swanlab", password: str = "s
     ValueError :
         如果第一次连接时未指定数据库名称
     """
-    global db_config
+    global db_config, db_instance
     bound = True
+
+    # 如果已经有缓存的实例，直接返回
+    if db_instance is not None and not database:
+        return db_instance
 
     # 设置数据库配置
     if not database and not db_config:
@@ -72,11 +81,14 @@ def connect(database: str = "swanlab", user: str = "swanlab", password: str = "s
     # 创建MySQL数据库连接
     try:
         # 先连接到MySQL服务器（不指定数据库）
-        temp_db = MySQLDatabase("swanlab", user=db_config['user'], password=db_config['password'],
-                               host=db_config['host'], port=db_config['port'])
-
-        # Debug: print temp_db dbconfig
-        print(f"DEBUG temp_db config: {db_config}")
+        temp_db = MySQLDatabase(
+            "swanlab",
+            user=db_config['user'],
+            password=db_config['password'],
+            host=db_config['host'],
+            port=db_config['port'],
+            connect_timeout=10
+        )
 
         temp_db.connect()
 
@@ -98,8 +110,23 @@ def connect(database: str = "swanlab", user: str = "swanlab", password: str = "s
         raise ConnectionError(f"Failed to connect to MySQL server: {e}")
 
     # 连接到指定数据库
-    swandb = MySQLDatabase(db_config['database'], user=db_config['user'], password=db_config['password'],
-                          host=db_config['host'], port=db_config['port'], charset='utf8mb4')
+    swandb = MySQLDatabase(
+        db_config['database'],
+        user=db_config['user'],
+        password=db_config['password'],
+        host=db_config['host'],
+        port=db_config['port'],
+        charset='utf8mb4',
+        # 添加连接池和超时设置
+        autoconnect=True,
+        # MySQL连接超时设置
+        connect_timeout=10,
+        read_timeout=30,
+        write_timeout=30
+    )
+
+    # 缓存数据库实例（无论是否 bound）
+    db_instance = swandb
 
     if not bound:
         # 动态绑定数据库
