@@ -179,22 +179,34 @@ class MySQLConnectionManager:
         Returns:
             bool: 连接成功返回True
         """
-        swanlog.info("Ensuring MySQL is connected")
-        if self.is_connected():
+        swanlog.debug("Ensuring MySQL is connected")
+
+        # 首先检查连接是否存在且有效
+        if self.is_connected() and self.test_connection():
             return True
-        swanlog.info("MySQL is not connected")
+
+        swanlog.info("MySQL connection is not available or stale, reconnecting...")
         with self._lock:
             # 双重检查锁定
-            if self.is_connected():
+            if self.is_connected() and self.test_connection():
                 return True
 
             try:
+                # 先断开可能存在的失效连接
+                if self._db:
+                    try:
+                        self._db.close()
+                    except:
+                        pass
+                    self._db = None
+                    self._connected = False
+
                 config = MySQLConfig.from_env()
                 success = self.connect(config)
                 if success:
-                    swanlog.info("Cloud database connection established")
+                    swanlog.info("Cloud database connection re-established")
                 else:
-                    swanlog.error("Failed to establish cloud database connection")
+                    swanlog.error("Failed to re-establish cloud database connection")
                 return success
             except Exception as e:
                 swanlog.error(f"Failed to connect to cloud database: {e}")
