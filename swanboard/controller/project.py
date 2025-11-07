@@ -96,6 +96,9 @@ def get_project_info(
                     experiment["experiment_id"] = experiment["id"]
                     # 移除不需要的字段
                     experiment.pop("project_id", None)
+                    # 标准化字段名（使用公共函数）
+                    from .utils import normalize_experiment_fields
+                    normalize_experiment_fields(experiment)
 
         return SUCCESS_200(project_data)
 

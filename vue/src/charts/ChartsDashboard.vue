@@ -146,7 +146,9 @@ provide('smoothMethod', smoothMethod)
 const changeNamespaceStatus = (opened, namespace) => {
   // console.log('namespace click', opened)
   // 向后端更新展开状态
-  props.updateNamespaceStatus(opened, namespace)
+  if (typeof namespace?.id === 'number') {
+    props.updateNamespaceStatus(opened, namespace)
+  }
 }
 
 const debouncedHandleSwitch = debounces(changeNamespaceStatus, 300)

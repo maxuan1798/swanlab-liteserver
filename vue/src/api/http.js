@@ -14,9 +14,7 @@ http.interceptors.request.use(
     console.log('[request] ', req.method, req.url, req.data || req.params || '')
 
     // Skip authentication for login and register endpoints
-    const isAuthEndpoint = req.url?.includes('/auth/') ||
-                          req.url?.includes('/login') ||
-                          req.url?.includes('/register')
+    const isAuthEndpoint = req.url?.includes('/auth/') || req.url?.includes('/login') || req.url?.includes('/register')
 
     if (!isAuthEndpoint) {
       const authStore = useAuthStore()

@@ -128,6 +128,10 @@ def get_experiment_info(
         # 移除不需要的字段
         experiment_data.pop("project_id", None)
 
+        # 标准化字段名（使用公共函数）
+        from .utils import normalize_experiment_fields
+        normalize_experiment_fields(experiment_data)
+
         # 从云端运行时信息获取 config 和 system
         try:
             # 从 CloudRuntimeInfo 表中获取运行时信息

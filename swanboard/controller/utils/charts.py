@@ -7,12 +7,15 @@ r"""
 @Description:
     图表相关函数 - 云端版本
 """
+import logging
 from ...db import CloudChart
 from ...db.mysql import CloudChart as Chart, CloudDisplay as Display, CloudNamespace as Namespace, CloudExperiment as Experiment
-from typing import List, Union
+from typing import List, Tuple, Union, Optional
+
+logger = logging.getLogger(__name__)
 
 
-def get_exp_charts(id: int):
+def get_exp_charts(id: int) -> Tuple[List[dict], List[dict]]:
     """
     获取单实验图表数据
 
@@ -20,6 +23,11 @@ def get_exp_charts(id: int):
     ----------
     id : int
         实验id
+
+    Returns
+    -------
+    Tuple[List[dict], List[dict]]
+        (图表列表, 命名空间列表)
     """
     charts: List[Chart] = Chart.filter(Chart.experiment == id)
     chart_list = CloudChart.search2list(charts)
@@ -49,10 +57,10 @@ def get_exp_charts(id: int):
         for display in Namespace.search2list(namespace.displays):
             displays.append(display["chart_id"]["id"])
         namespace_list[index]["charts"] = displays
-    return get_pinned_and_hidden(chart_list, namespace_list)
+    return get_pinned_and_hidden(chart_list, namespace_list, experiment_id=id)
 
 
-def get_proj_charts(id: int):
+def get_proj_charts(id: int) -> Tuple[List[dict], List[dict]]:
     """
     获取多实验对比图表数据
 
@@ -60,6 +68,11 @@ def get_proj_charts(id: int):
     ----------
     id : int
         项目id
+
+    Returns
+    -------
+    Tuple[List[dict], List[dict]]
+        (图表列表, 命名空间列表)
     """
     # 支持的图表类型
     allow_types = ["default", "line", "image", "audio"]
@@ -70,13 +83,14 @@ def get_proj_charts(id: int):
 
     if not exp_ids:
         # 没有 experiment，直接返回空结构
-        return get_pinned_and_hidden([], [])
+        return get_pinned_and_hidden([], [], project_id=id)
 
     # 根据 experiment_id 列表查询 chart（注意模型字段名为 chart_type、experiment/exeriment_id）
     try:
         multi_charts = Chart.filter(Chart.experiment.in_(exp_ids), Chart.chart_type.in_(allow_types))
-    except Exception:
+    except Exception as e:
         # 兜底：如果 ORM 不支持 in_ 或 filter 的组合，回退到遍历过滤
+        logger.warning(f"Failed to query charts with in_ filter for project {id}: {e}, falling back to manual filtering")
         all_charts = Chart.filter() if hasattr(Chart, "filter") else []
         multi_charts = [c for c in all_charts if getattr(c, "experiment", None) and getattr(getattr(c, "experiment"), "project", None) and getattr(getattr(c, "experiment"), "project").id == id and getattr(c, "chart_type", None) in allow_types]
 
@@ -89,7 +103,6 @@ def get_proj_charts(id: int):
 
         # 处理不同 ORM 返回值的兼容：优先使用 ORM 关联对象列表，否则尝试访问属性
         for source in _chart.sources:
-            print("chart source:", source)
             try:
                 # source -> tag -> experiment
                 tag = getattr(source, "tag", None) or getattr(source, "tag_id", None) or {}
@@ -118,33 +131,36 @@ def get_proj_charts(id: int):
     namespaces = Namespace.filter() if hasattr(Namespace, "filter") else []
     namespace_list = Namespace.search2list(namespaces) if hasattr(Namespace, "search2list") else []
 
+    # 预加载 experiment_id -> project_id 映射，避免循环中的 N+1 查询
+    exp_to_proj_map = {exp.id: getattr(exp.project, "id", None) for exp in experiments}
+
     def _chart_belongs_to_project(chart_repr: dict, project_id: int) -> bool:
         """
         尝试从 display 返回的 chart 表示中判断 chart 是否属于指定 project。
         支持多种结构：chart_repr 中的 'experiment' 可能为 id、dict 或嵌套包含 project 信息。
-        回退到 DB 查询 Experiment 时也会尝试确定关系。
+        使用预加载的映射避免数据库查询。
         """
         if not isinstance(chart_repr, dict):
             return False
         # 可能的键名
-        exp_field = chart_repr.get("experiment") or chart_repr.get("experiment_id") or chart_repr.get("experiment_id")
+        exp_field = chart_repr.get("experiment") or chart_repr.get("experiment_id")
         # 如果是 dict，查看其中的 project 或 project_id
         if isinstance(exp_field, dict):
             proj = exp_field.get("project") or exp_field.get("project_id")
             if isinstance(proj, dict):
                 return proj.get("id") == project_id
             return proj == project_id
-        # 如果是 int，直接用 DB 判断
+        # 如果是 int，使用预加载的映射
         if isinstance(exp_field, int):
-            exps = Experiment.filter(Experiment.id == exp_field)
-            if exps:
-                return getattr(exps[0].project, "id", None) == project_id
+            proj_id = exp_to_proj_map.get(exp_field)
+            return proj_id == project_id
         return False
 
     # 通过 namespace -> displays -> chart 来筛选出属于该 project 的 namespace 中的 charts
     for index, namespace in enumerate(namespaces):
         displays = []
-        for display in Display.search2list(namespace.displays):
+        namespace_displays = Display.search2list(namespace.displays)
+        for display in namespace_displays:
             chart_repr = display.get("chart_id") if isinstance(display, dict) else None
             if not chart_repr:
                 continue
@@ -153,7 +169,8 @@ def get_proj_charts(id: int):
             if ctype not in allow_types:
                 continue
             # 判断该 chart 是否属于当前 project
-            if _chart_belongs_to_project(chart_repr, id):
+            belongs = _chart_belongs_to_project(chart_repr, id)
+            if belongs:
                 displays.append(chart_repr.get("id"))
         if len(displays) > 0:
             namespace_list[index]["charts"] = displays
@@ -161,22 +178,82 @@ def get_proj_charts(id: int):
     # 过滤 namespace 中没有 charts 的项
     namespace_list = [namespace for namespace in namespace_list if "charts" in namespace and len(namespace["charts"]) > 0]
 
-    return get_pinned_and_hidden(charts, namespace_list)
+    return get_pinned_and_hidden(charts, namespace_list, project_id=id)
 
 
-def get_pinned_and_hidden(chart_list: List[dict], namespace_list: List[dict]) -> Union[List[dict], List[dict]]:
+def get_pinned_and_hidden(
+    chart_list: List[dict],
+    namespace_list: List[dict],
+    project_id: Optional[int] = None,
+    experiment_id: Optional[int] = None
+) -> Tuple[List[dict], List[dict]]:
     """
     获取置顶图表与隐藏图表
+
+    Parameters
+    ----------
+    chart_list : List[dict]
+        图表列表
+    namespace_list : List[dict]
+        命名空间列表
+    project_id : int, optional
+        项目ID，用于查询项目的 pinned_opened 和 hidden_opened
+    experiment_id : int, optional
+        实验ID，用于查询实验的 pinned_opened 和 hidden_opened
     """
-    if not len(chart_list) or not len(namespace_list):
+    # 如果没有图表，返回空列表
+    if not len(chart_list):
         return chart_list, namespace_list
-    # 获取pinned和hidden的开启/关闭状态，通过chart_list的第一个元素的experiment_id或者project_id获取
-    first_chart = chart_list[0]
-    if first_chart["experiment_id"] is not None:
-        exp_or_proj = first_chart["experiment_id"]
-    else:
-        exp_or_proj = first_chart["project_id"]
-    pinned_opened, hidden_opened = exp_or_proj["pinned_opened"], exp_or_proj["hidden_opened"]
+
+    # 获取pinned和hidden的开启/关闭状态
+    pinned_opened = 1  # 默认值
+    hidden_opened = 0  # 默认值
+
+    # 从数据库查询 experiment 或 project 的状态
+    from ...db.mysql import CloudProject as Project
+
+    if experiment_id:
+        try:
+            exp = Experiment.get_by_id(experiment_id)
+            if exp:
+                pinned_opened = getattr(exp, 'pinned_opened', 1)
+                hidden_opened = getattr(exp, 'hidden_opened', 0)
+        except Exception as e:
+            logger.debug(f"Failed to fetch experiment {experiment_id} for pinned/hidden status: {e}")
+    elif project_id:
+        try:
+            proj = Project.get_by_id(project_id)
+            if proj:
+                pinned_opened = getattr(proj, 'pinned_opened', 1)
+                hidden_opened = getattr(proj, 'hidden_opened', 0)
+        except Exception as e:
+            logger.debug(f"Failed to fetch project {project_id} for pinned/hidden status: {e}")
+
+    # 如果无法从参数获取，尝试从 chart_list 推断
+    if not experiment_id and not project_id and len(chart_list) > 0:
+        first_chart = chart_list[0]
+        # 尝试从 chart 中获取 experiment 或 project 的 ID
+        exp_id = first_chart.get("experiment") or first_chart.get("experiment_id")
+        proj_id = first_chart.get("project") or first_chart.get("project_id")
+
+        if exp_id and isinstance(exp_id, int):
+            try:
+                exp = Experiment.get_by_id(exp_id)
+                if exp:
+                    pinned_opened = getattr(exp, 'pinned_opened', 1)
+                    hidden_opened = getattr(exp, 'hidden_opened', 0)
+                    experiment_id = exp_id
+            except Exception as e:
+                logger.debug(f"Failed to infer experiment {exp_id} from chart_list: {e}")
+        elif proj_id and isinstance(proj_id, int):
+            try:
+                proj = Project.get_by_id(proj_id)
+                if proj:
+                    pinned_opened = getattr(proj, 'pinned_opened', 1)
+                    hidden_opened = getattr(proj, 'hidden_opened', 0)
+                    project_id = proj_id
+            except Exception as e:
+                logger.debug(f"Failed to infer project {proj_id} from chart_list: {e}")
 
     # 遍历chart_list，动态生成pinned与hidden的namespace，这两个namespace的id分别为-1与-2
     pinned_namespace = {
@@ -184,40 +261,59 @@ def get_pinned_and_hidden(chart_list: List[dict], namespace_list: List[dict]) ->
         "name": "pinned",
         "charts": [],
         "opened": pinned_opened,
-        "experiment_id": first_chart["experiment_id"],
-        "project_id": first_chart["project_id"],
+        "experiment_id": experiment_id,
+        "project_id": project_id,
     }
     hidden_namespace = {
         "id": -2,
         "name": "hidden",
         "charts": [],
         "opened": hidden_opened,
-        "experiment_id": first_chart["experiment_id"],
-        "project_id": first_chart["project_id"],
+        "experiment_id": experiment_id,
+        "project_id": project_id,
     }
     for chart in chart_list:
         # 如果chart的status为1，则将其加入pinned的namespace，如果是-1加入hidden的namespace
         # 如果是0，则不加入任何namespace
         # 首先将chart对象加入pinned或hidden的namespace，后续会滤除为id
-        if chart["status"] == 1:
+        chart_status = chart.get("status", 0)
+        if chart_status == 1:
             pinned_namespace["charts"].append(chart)
-        elif chart["status"] == -1:
+        elif chart_status == -1:
             hidden_namespace["charts"].append(chart)
-        if chart["status"] != 0:
-            del_chart_from_namespace(namespace_list, chart["id"])
+        if chart_status != 0:
+            chart_id = chart.get("id")
+            if chart_id is not None:
+                del_chart_from_namespace(namespace_list, chart_id)
     # 滤除namespace中的空charts的namespace
-    namespace_list = [namespace for namespace in namespace_list if len(namespace["charts"]) != 0]
+    namespace_list = [namespace for namespace in namespace_list if len(namespace.get("charts", [])) != 0]
+
+    # 如果没有任何 namespace，创建一个默认的 namespace 包含所有 status=0 的图表
+    if len(namespace_list) == 0:
+        default_charts = [chart for chart in chart_list if chart.get("status", 0) == 0]
+        if len(default_charts) > 0:
+            default_namespace = {
+                "id": 1,
+                "name": "default",
+                "charts": [chart.get("id") for chart in default_charts],
+                "sort": 0,
+                "opened": 1,
+                "experiment_id": experiment_id,
+                "project_id": project_id,
+            }
+            namespace_list.append(default_namespace)
+
     # 如果pinned_namespace中有charts，则加入namespace_list的首位
     if len(pinned_namespace["charts"]) > 0:
         # namespaces的charts字段根据每个元素的sort排序，小的在前
-        pinned_namespace["charts"].sort(key=lambda x: x["sort"])
-        pinned_namespace = {**pinned_namespace, "charts": [chart["id"] for chart in pinned_namespace["charts"]]}
+        pinned_namespace["charts"].sort(key=lambda x: x.get("sort", 0))
+        pinned_namespace = {**pinned_namespace, "charts": [chart.get("id") for chart in pinned_namespace["charts"]]}
         namespace_list.insert(0, pinned_namespace)
     # 如果hidden_namespace中有charts，则加入namespace_list的末位
     if len(hidden_namespace["charts"]) > 0:
         # namespaces的charts字段根据每个元素的sort排序，小的在前
-        hidden_namespace["charts"].sort(key=lambda x: x["sort"])
-        hidden_namespace = {**hidden_namespace, "charts": [chart["id"] for chart in hidden_namespace["charts"]]}
+        hidden_namespace["charts"].sort(key=lambda x: x.get("sort", 0))
+        hidden_namespace = {**hidden_namespace, "charts": [chart.get("id") for chart in hidden_namespace["charts"]]}
         namespace_list.append(hidden_namespace)
     return chart_list, namespace_list
 

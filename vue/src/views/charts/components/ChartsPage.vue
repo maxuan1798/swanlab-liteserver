@@ -87,7 +87,8 @@ const on = (sources, cid, callback) => {
  */
 const getTagDataByExpName = (exp_name, cid, callback) => {
   const exp_id = projectStore.experiments.find((exp) => exp.name === exp_name).id
-  const tag_name = props.charts.find((chart) => chart.id === cid).name
+  const chart = props.charts.find((chart) => chart.id === cid)
+  const tag_name = chart?.name ?? chart?.key
   http
     .get(`/experiment/${exp_id}/tag/${tag_name}`)
     .then((res) => {

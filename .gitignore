@@ -38,3 +38,4 @@ LightningTest/
 swanboard/template
 docker/clickhouse_data/
 docker/mysql_data/
+.envrc

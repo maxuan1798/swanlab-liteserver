@@ -80,11 +80,7 @@
           {{ authStore.error }}
         </div>
 
-        <button
-          type="submit"
-          class="auth-button"
-          :disabled="authStore.isLoading"
-        >
+        <button type="submit" class="auth-button" :disabled="authStore.isLoading">
           <span v-if="authStore.isLoading">Creating Account...</span>
           <span v-else>Create Account</span>
         </button>
@@ -126,7 +122,7 @@ const validateForm = () => {
   let isValid = true
 
   // Clear previous errors
-  Object.keys(errors).forEach(key => {
+  Object.keys(errors).forEach((key) => {
     errors[key] = ''
   })
 
@@ -211,7 +207,12 @@ const getParticleStyle = (index) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--background-default) 0%, var(--background-higher) 50%, var(--primary-dimmest) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--background-default) 0%,
+    var(--background-higher) 50%,
+    var(--primary-dimmest) 100%
+  );
   padding: 20px;
   position: relative;
   overflow: hidden;
@@ -270,8 +271,7 @@ const getParticleStyle = (index) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-image:
-    linear-gradient(rgba(28, 116, 221, 0.02) 1px, transparent 1px),
+  background-image: linear-gradient(rgba(28, 116, 221, 0.02) 1px, transparent 1px),
     linear-gradient(90deg, rgba(28, 116, 221, 0.02) 1px, transparent 1px);
   background-size: 40px 40px;
   mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
@@ -337,7 +337,8 @@ const getParticleStyle = (index) => {
 }
 
 @keyframes waveMove {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateX(-10%) scaleY(1);
   }
   25% {
@@ -369,7 +370,8 @@ const getParticleStyle = (index) => {
 }
 
 @keyframes float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0px) scale(1);
   }
   50% {
@@ -381,10 +383,7 @@ const getParticleStyle = (index) => {
   background: var(--background-paper);
   border-radius: 16px;
   padding: 48px 40px;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.08),
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   width: 100%;
   max-width: 420px;
   border: 1px solid var(--outline-dimmer);

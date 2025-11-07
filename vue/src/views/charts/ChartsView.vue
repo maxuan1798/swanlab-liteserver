@@ -34,11 +34,6 @@ http.get(`/project/${workspaceStore.currentProjectId}/charts`).then(({ data }) =
   namespaces.value = data.namespaces
   groups.value = generateGroups()
   ready.value = true
-  console.log('charts', charts.value)
-  console.log('namespaces', namespaces.value)
-  console.log('groups', groups.value)
-  console.log('ready', ready.value)
-  console.log('chartsView data', data)
 })
 const ready = ref(false)
 // ---------------------------------- 数据驱动 ----------------------------------
@@ -52,6 +47,32 @@ const generateGroups = () => {
   // 生成groups
   const groups = []
 
+  // 当后端未提供 namespaces 时，使用一个默认分组包含所有可见图表
+  if (!namespaces.value || namespaces.value.length === 0) {
+    const fallbackCharts = []
+    charts.value.forEach((chart) => {
+      if (!chart) return
+      // 规范化字段：后端可能使用 key/chart_type
+      const normalized = {
+        ...chart,
+        name: chart.name ?? chart.key,
+        type: chart.type ?? chart.chart_type ?? 'line'
+      }
+      // 如果chart的所有source都为不可见，不加入
+      const allSourcesInvisible = normalized.source?.every((source) => !projectStore.showMap[source])
+      if (allSourcesInvisible) return
+      // 仅保留未报错的 source
+      const sources = normalized.source?.filter((source) => !(normalized.error && normalized.error[source])) || []
+      const validSourcesInvisible = sources.every((source) => !projectStore.showMap[source])
+      if (validSourcesInvisible) return
+      fallbackCharts.push(normalized)
+    })
+    if (fallbackCharts.length) {
+      groups.push({ name: 'Default', charts: fallbackCharts })
+    }
+    return groups
+  }
+
   namespaces.value.forEach((namespace) => {
     const group = {
       ...namespace,
@@ -64,19 +85,24 @@ const generateGroups = () => {
       if (!chart) {
         return
       }
-
+      // 规范化字段
+      const normalized = {
+        ...chart,
+        name: chart.name ?? chart.key,
+        type: chart.type ?? chart.chart_type ?? 'line'
+      }
       // 如果chart的所有source都为不可见，不push
-      const allSourcesInvisible = chart.source.every((source) => !projectStore.showMap[source])
+      const allSourcesInvisible = normalized.source.every((source) => !projectStore.showMap[source])
       if (allSourcesInvisible) return
 
       // 首先找到所有source中不在error的keys中的source
-      const sources = chart.source.filter((source) => !chart.error[source])
+      const sources = normalized.source.filter((source) => !normalized.error[source])
 
       const validSourcesInvisible = sources.every((source) => !projectStore.showMap[source])
       if (validSourcesInvisible) return
 
       // 如果在source中不在error的keys中的都不可见，不push
-      group.charts.push(chart)
+      group.charts.push(normalized)
     })
     // 如果group的所有chart都为不可见，不push
     if (group.charts.length) {

@@ -60,7 +60,9 @@
         <SLMenu class="w-48" down>
           <template #default="{ open }">
             <div class="flex items-center gap-2 px-3 py-1.5 border rounded hover:border-primary-default cursor-pointer">
-              <div class="w-6 h-6 rounded-full bg-primary-default flex items-center justify-center text-white text-xs font-semibold">
+              <div
+                class="w-6 h-6 rounded-full bg-primary-default flex items-center justify-center text-white text-xs font-semibold"
+              >
                 {{ authStore.currentUser?.name?.charAt(0)?.toUpperCase() || 'U' }}
               </div>
               <span class="text-sm">{{ authStore.currentUser?.name }}</span>
