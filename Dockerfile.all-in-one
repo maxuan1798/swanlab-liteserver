@@ -1,7 +1,8 @@
 # SwanLab All-in-One Docker Image
 # 包含所有服务：SwanLab服务器、MySQL、ClickHouse、Redis、MinIO、Nginx、Fluent Bit
 
-FROM ubuntu:22.04
+# 明确指定平台为 linux/amd64
+FROM --platform=linux/amd64 ubuntu:22.04
 
 # 设置非交互模式
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,6 +10,12 @@ ENV TZ=Asia/Shanghai
 
 # 设置时区
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 验证架构
+RUN dpkg --print-architecture && \
+    if [ "$(dpkg --print-architecture)" != "amd64" ]; then \
+        echo "Error: This Dockerfile must be built on x86-64/amd64 architecture" && exit 1; \
+    fi
 
 # 更新系统并安装基础软件包
 RUN apt-get update && apt-get upgrade -y && apt-get install -y \
@@ -65,11 +72,15 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-server clickhouse-client && \
     rm -rf /var/lib/apt/lists/*
 
-# 安装MinIO
-RUN wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /usr/local/bin/minio && \
+# 安装MinIO (明确使用 amd64 版本)
+RUN ARCH="amd64" && \
+    wget https://dl.min.io/server/minio/release/linux-${ARCH}/minio -O /usr/local/bin/minio && \
     chmod +x /usr/local/bin/minio && \
-    wget https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && \
-    chmod +x /usr/local/bin/mc
+    wget https://dl.min.io/client/mc/release/linux-${ARCH}/mc -O /usr/local/bin/mc && \
+    chmod +x /usr/local/bin/mc && \
+    # 验证下载的文件
+    file /usr/local/bin/minio && \
+    file /usr/local/bin/mc
 
 # 安装Fluent Bit (使用官方仓库)
 RUN curl https://packages.fluentbit.io/fluentbit.key | gpg --dearmor -o /usr/share/keyrings/fluentbit-keyring.gpg && \
