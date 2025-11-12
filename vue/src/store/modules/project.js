@@ -35,7 +35,8 @@ export const useProjectStore = defineStore('project', () => {
   const showMap = computed(() => {
     const showMap = {}
     project.value?.experiments.forEach((e) => {
-      showMap[e.name] = e.show
+      // 默认为可见（1），如果 show 字段缺失
+      showMap[e.name] = e.show ?? 1
     })
     return showMap
   })
